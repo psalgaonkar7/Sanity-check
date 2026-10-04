@@ -153,16 +153,17 @@ async function checkChina() {
         // era.raileurope.cn loads 200+ separate JS chunks before the sign-in form appears,
         // and how long that takes varies a lot run to run — reproduced live both at ~6s and
         // at >30s. 30s was flagging it KO on real, accessible runs (confirmed manually both
-        // times) purely because of that variance, not an actual outage. 60s/60s gives it
-        // real headroom without costing anything on the fast runs.
+        // times) purely because of that variance, not an actual outage. 60s was still not
+        // enough on 2026-10-04 (timed out at the full 60s, manual login fine), so the form wait
+        // is now 120s. It costs nothing on fast runs: waitFor returns the moment the form shows.
         await page.goto(c.url, { waitUntil: 'domcontentloaded', timeout: 60000 });
-        await page.locator('input[type="password"]').first().waitFor({ state: 'visible', timeout: 60000 });
+        await page.locator('input[type="password"]').first().waitFor({ state: 'visible', timeout: 120000 });
         out[c.key] = { status: 'OK', detail: `sign-in page rendered in ${((Date.now() - t0) / 1000).toFixed(1)}s`, url: c.url };
       } catch (e) {
         const title = await page.title().catch(() => '');
         out[c.key] = {
           status: 'NOT OK',
-          detail: `sign-in page did not render within 60s (title "${title}"): ${String(e).split('\n')[0].slice(0, 90)}`,
+          detail: `sign-in page did not render within 120s (title "${title}"): ${String(e).split('\n')[0].slice(0, 90)}`,
           url: c.url,
         };
       }
