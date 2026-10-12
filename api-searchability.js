@@ -15,9 +15,17 @@ const fs = require('fs');
 const path = require('path');
 
 // Configurable so this works on any teammate's machine: set POSTMAN_DIR to point at your own
-// exported Postman environment folder. Defaults to this machine's path for convenience.
+// exported Postman environment folder. Otherwise the first of these that exists is used — the
+// OneDrive folder was reorganised once already (Notes\Training\Postman json files ->
+// Training Material\Postman Collections), and the old path silently skipped both envs, so the
+// mail showed B2C as [check manually] with no error anywhere.
+const POSTMAN_DIR_CANDIDATES = [
+  'C:\\Users\\PSalgaonkar\\OneDrive - RAILEUROPE\\Desktop\\Training Material\\Postman Collections\\LH',
+  'C:\\Users\\PSalgaonkar\\OneDrive - RAILEUROPE\\Desktop\\Notes\\Training\\Postman json files\\LH',
+];
 const POSTMAN_DIR = process.env.POSTMAN_DIR
-  || 'C:\\Users\\PSalgaonkar\\OneDrive - RAILEUROPE\\Desktop\\Notes\\Training\\Postman json files\\LH';
+  || POSTMAN_DIR_CANDIDATES.find((d) => fs.existsSync(d))
+  || POSTMAN_DIR_CANDIDATES[0];
 
 // Which Postman env files to drive. Staging = validate; Production = real MSC signal.
 const ENVS = [
@@ -135,7 +143,7 @@ async function searchOne(endpoint, token, od, dateStr) {
 
   for (const e of ENVS) {
     if (only && e.label !== only) continue;
-    if (!fs.existsSync(e.file)) { console.log(`### ${e.label}: env file not found, skipped\n`); continue; }
+    if (!fs.existsSync(e.file)) { console.log(`### ${e.label}: env file not found, skipped (${e.file})\n`); continue; }
     const env = JSON.parse(fs.readFileSync(e.file, 'utf8'));
     const endpoint = envVal(env, 'endpoint');
     const token = envVal(env, 'auth_token');

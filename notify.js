@@ -189,9 +189,15 @@ function fromExtra(r, okText = 'OK') {
 function buildItems() {
   const prod = (api.envs || []).find((e) => e.label === 'PRODUCTION');
   const testable = prod && (prod.summary.testable != null ? prod.summary.testable : prod.rows.length);
-  const b2c = !prod ? { v: MANUAL, ok: null, note: 'API check did not run' }
-    : prod.summary.pass === testable ? { v: 'OK (API)', ok: true }
-      : { v: 'KO', ok: false, note: `${testable - prod.summary.pass}/${testable} production API routes failing` };
+  // One line for both channels: B2C is proven by the production API search, B2B by the booking
+  // run (every sector searched, carted and referenced). If only the API half could not run
+  // (e.g. VPN down), the line still reads OK as Pratikesh asked, because B2B was verified; it
+  // stays in the "still to check" reminder so the unverified B2C half is not forgotten.
+  const bookingOk = !bookingIssues().length;
+  const b2c = !bookingOk ? { v: 'KO', ok: false, note: 'B2B booking run did not complete: ' + bookingIssues().join('; ') }
+    : !prod ? { v: 'OK', ok: null, manualOnly: true, note: 'B2B verified by the booking run; B2C API check did not run, check B2C by hand' }
+      : prod.summary.pass === testable ? { v: 'OK', ok: true }
+        : { v: 'KO', ok: false, note: `${testable - prod.summary.pass}/${testable} production API routes failing` };
 
   const rows = b2b.connectivityRows || [];
   const unmapped = (b2b.coverage && b2b.coverage.unmapped) || [];
@@ -222,7 +228,7 @@ function buildItems() {
     : { v: String(sf.count), ok: sf.count === 0 ? true : null, note: sf.count ? 'review: ' + sf.cases.map((c) => c.number).join(', ') : null };
 
   return [
-    { label: 'B2C :- Check OD on B2C website', ...b2c },
+    { label: 'B2C & B2B :- Check OD on B2C & B2B website', ...b2c },
     { label: 'B2B :- System Connectivity Status', ...conn },
     { label: 'Group Bookings-Salesforce Sync', ...fromExtra(extras.appflow) },
     { label: 'Key account China working', ...fromExtra(extras.chinaKeyAccount, 'OK') },

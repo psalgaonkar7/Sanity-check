@@ -339,8 +339,11 @@ Honesty rules built into the draft:
   timed out with zero booking references (a real portal-side "not enough seats" error) while
   every other item still read OK, so the subject alone would have said OK with nothing to
   show otherwise except the missing reference numbers.
-- B2C is written as `OK (API)` because the website itself blocks automated browsers; what is
-  verified is the B2C search engine.
+- Item 1 is one line for both channels, `B2C & B2B :- Check OD on B2C & B2B website`. B2C is
+  proven by the production API search (the website itself blocks automated browsers), B2B by
+  the booking run. It reads KO if either half fails. If only the API could not run (e.g. VPN
+  down), it still reads OK because B2B was verified, but it is listed under "still to check"
+  so B2C gets checked by hand.
 
 The draft is also saved to `report/sanity-mail.html` and `report/sanity-mail.txt`.
 `MAIL_TO` in `.env` pre-fills the To: line. `MSC_NO_MAIL=1` skips opening the draft.
