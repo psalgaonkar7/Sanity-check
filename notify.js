@@ -223,6 +223,12 @@ function buildItems() {
   // auto-sent (a person reviews every draft) and because deciding case type is always a manual
   // judgment call regardless of what this shows. Kept in `manualOnly` so it still surfaces in
   // the "still to check" reminder even though it no longer reads as MANUAL in the mail itself.
+  // The run reads the Glue sanity-check result (discrepancy count), but the support role can't
+  // see run history for most Ariane jobs, so "did any Glue job fail" stays a manual Slack check.
+  const dropfile = fromExtra(extras.dropfile);
+  dropfile.manualOnly = true;
+  dropfile.note = [dropfile.note, 'also check Slack #ariane-alerts-prod for failed Glue jobs'].filter(Boolean).join(' | ');
+
   const sf = extras.sfCases;
   const sfItem = !sf || sf.status === 'SKIPPED' ? { v: '0', ok: null, manualOnly: true, note: sf && sf.detail }
     : { v: String(sf.count), ok: sf.count === 0 ? true : null, note: sf.count ? 'review: ' + sf.cases.map((c) => c.number).join(', ') : null };
@@ -235,6 +241,7 @@ function buildItems() {
     { label: 'Customer care china working', ...fromExtra(extras.chinaCustomerCare, 'OK') },
     { label: 'SNCF :- Check OD', ...sncf },
     { label: 'Primer Status Page', ...primer },
+    { label: 'Dropfile sanity check', ...dropfile },
     { label: 'SF cases not linked with an SR', sep: ' : ', ...sfItem },
   ];
 }

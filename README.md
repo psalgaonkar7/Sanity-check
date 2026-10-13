@@ -238,6 +238,7 @@ extra time: the extra checks run in parallel with the browser suite.
 | Group Bookings–Salesforce Sync | AWS CLI (`era-prod` SSO profile) → AppFlow `tf-era-prod-shared-salesforce-flow` | flow Active and **no failed execution since the previous sanity** |
 | Key account China | browser loads `www.era.raileurope.cn` | the sign-in page actually renders |
 | Customer care China | browser loads `www.customercare.raileurope.cn` | the sign-in page actually renders |
+| Dropfile sanity check | AWS CLI (`ariane-prod` SSO profile, same `era` login) → latest `[Check] Discrepancies: N` line from Glue job `tf-ariane-prod-transactions-sanity-check` in `/aws-glue/jobs/output` (job runs daily ~14:00 IST; last 30 h are read) | 0 discrepancies. Failed Glue jobs are **not** covered (the support role can't read most Ariane job histories), so the run reminds you to check Slack `#ariane-alerts-prod`. Procedure: Confluence SR page 2223472642 |
 | SF cases not linked with an SR | Salesforce CLI → the *Technical HD view* list view | the count of cases in that view |
 
 Three things that are easy to get wrong, and why the checks are built the way they are:

@@ -72,8 +72,8 @@ function awsCli() {
   return fs.existsSync(guess) ? guess : 'aws';
 }
 
-function aws(args) {
-  const r = spawnSync(awsCli(), [...args, '--region', 'eu-west-1', '--profile', process.env.AWS_PROFILE_SANITY || 'era-prod', '--output', 'json'],
+function aws(args, profile = process.env.AWS_PROFILE_SANITY || 'era-prod') {
+  const r = spawnSync(awsCli(), [...args, '--region', 'eu-west-1', '--profile', profile, '--output', 'json'],
     { encoding: 'utf8', timeout: 60000 });
   if (r.error) return { err: String(r.error.code || r.error.message) };
   if (r.status !== 0) return { err: (r.stderr || r.stdout || '').trim() };
@@ -116,6 +116,38 @@ async function checkAppFlow() {
     detail: `flow ${flowStatus}; ${inWindow.length} run(s) since last sanity, ${failed.length} failed; ${lastTxt}`,
     failed: failed.map((e) => ({ at: e.startedAt, status: e.executionStatus, error: e.executionResult && e.executionResult.errorInfo && e.executionResult.errorInfo.executionMessage })),
   };
+}
+
+// ---------------------------------------------------------------------------------------
+// Dropfile — the Ariane Glue job tf-ariane-prod-transactions-sanity-check runs by itself every
+// day around 14:00 IST and logs "[Check] Discrepancies: N" to /aws-glue/jobs/output (procedure:
+// Confluence SR 2223472642). Read through the ariane-prod profile, which shares the `era` SSO
+// login. We read the latest result from the last 30 h, so a 02:00 IST run still sees
+// yesterday's 14:00 result. This does NOT cover "any Glue job failed": the support role is
+// denied run history on most Ariane jobs, so #ariane-alerts-prod is still checked by hand.
+// ---------------------------------------------------------------------------------------
+const DROPFILE_PROFILE = process.env.AWS_PROFILE_ARIANE || 'ariane-prod';
+
+async function checkDropfile() {
+  const since = Date.now() - 30 * 3600e3;
+  const r = aws(['logs', 'filter-log-events', '--log-group-name', '/aws-glue/jobs/output',
+    '--start-time', String(since), '--filter-pattern', '"Discrepancies"'], DROPFILE_PROFILE);
+  if (r.err) {
+    if (/token.*expired|sso|refresh failed|login/i.test(r.err)) {
+      return { status: 'SKIPPED', detail: 'AWS login expired — run: aws sso login --sso-session era' };
+    }
+    if (/ENOENT|not recognized|not found/i.test(r.err)) return { status: 'SKIPPED', detail: 'AWS CLI not found (set AWS_CLI in .env)' };
+    return { status: 'SKIPPED', detail: 'AWS CLI error: ' + r.err.split('\n')[0].slice(0, 120) };
+  }
+  const hits = (r.json.events || [])
+    .map((e) => ({ at: e.timestamp, n: Number((/Discrepancies:\s*(\d+)/.exec(e.message) || [])[1]) }))
+    .filter((e) => Number.isFinite(e.n));
+  if (!hits.length) return { status: 'SKIPPED', detail: 'no dropfile sanity-check result in the last 30 h (job normally runs ~14:00 IST)' };
+  const last = hits.reduce((a, b) => (b.at > a.at ? b : a));
+  const when = new Date(last.at + 5.5 * 3600e3).toISOString().slice(0, 16).replace('T', ' ') + ' IST';
+  return last.n === 0
+    ? { status: 'OK', detail: `0 discrepancies (Glue sanity-check run ${when})` }
+    : { status: 'NOT OK', detail: `${last.n} discrepancies (Glue sanity-check run ${when}) — get VerificationLineDropfile.csv, see Confluence SR 2223472642` };
 }
 
 // ---------------------------------------------------------------------------------------
@@ -220,8 +252,8 @@ async function checkSalesforce() {
 
 // ---------------------------------------------------------------------------------------
 async function main() {
-  const [primer, appflow, china, sfCases] = await Promise.all([checkPrimer(), checkAppFlow(), checkChina(), checkSalesforce()]);
-  const result = { runId: process.env.MSC_RUN_ID || null, at: new Date().toISOString(), primer, appflow, ...china, sfCases };
+  const [primer, appflow, dropfile, china, sfCases] = await Promise.all([checkPrimer(), checkAppFlow(), checkDropfile(), checkChina(), checkSalesforce()]);
+  const result = { runId: process.env.MSC_RUN_ID || null, at: new Date().toISOString(), primer, appflow, dropfile, ...china, sfCases };
   fs.mkdirSync(REPORT, { recursive: true });
   fs.writeFileSync(OUT, JSON.stringify(result, null, 2));
   const rows = [
@@ -229,6 +261,7 @@ async function main() {
     ['Group Bookings–SF sync (AppFlow)', appflow],
     ['Key account China', result.chinaKeyAccount],
     ['Customer care China', result.chinaCustomerCare],
+    ['Dropfile sanity check (Glue)', dropfile],
     ['SF cases not linked with an SR', sfCases],
   ];
   console.log('Extra sanity checks (read-only)\n');
