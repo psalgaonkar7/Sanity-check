@@ -1,0 +1,119 @@
+RAIL EUROPE AUTOMATED SANITY CHECK (ASC) - CMD CHEAT SHEET
+Folder: C:\Claude\RE\ASC     Repo: github.com/psalgaonkar7/Sanity-check
+
+0. GOLDEN RULES
+ - Run ONE sanity at a time (shared B2B login, cart, POS). Two at once corrupt each other.
+ - It never pays. It stops at Traveler Details and captures booking refs (K + 9 digits).
+ - Open CMD and always start with:   cd C:\Claude\RE\ASC
+
+1. DAILY ROUTINE
+ a) Log in (about once a day; opens browser for AWS SSO, then B2B portal):
+      cd C:\Claude\RE\ASC
+      npm run auth
+    - AWS SSO step can be skipped/cancelled. Then the Group Bookings-Salesforce Sync
+      and Dropfile sanity check items read [check manually].
+    - One AWS login (sso-session "era") covers both AWS profiles the sanity run uses:
+      era-prod (AppFlow) and ariane-prod (dropfile).
+ b) Run the sanity check (about 5.5 min):
+      cd C:\Claude\RE\ASC
+      npm run sanity
+    - Needs the VPN / corporate network connected (API step reaches LocoHub).
+    - Last step posts the "Sanity done" line to Slack and opens the Outlook draft.
+    - Paste the email body (Ctrl+V), review, press Send yourself.
+    - The mail has 9 points, each OK or KO:
+        1 B2C & B2B check   2 B2B connectivity   3 Group Bookings-Salesforce Sync
+        4 Key account China 5 Customer care China 6 SNCF   7 Primer
+        8 Dropfile sanity check   9 SF cases (shows 0 until Salesforce is approved)
+ c) By hand each run (the tool cannot do these):
+      - Slack #ariane-alerts-prod: any failed Glue job? If yes raise a Jira SR for the
+        third-party team. (Procedure: Confluence SR page 2223472642; recording in
+        #team-application-support)
+      - SF case count (point 9)
+
+2. IF "node" IS NOT RECOGNISED IN CMD
+      set "PATH=C:\Users\PSalgaonkar\AppData\Local\nodejs-portable\node-v24.18.0-win-x64;%PATH%"
+    ("export ..." is Git Bash only; it does not work in CMD)
+
+3. LOGIN PROBLEMS
+ - Every check times out / looks broken everywhere = B2B session expired:
+      node check-login.js            (about 10 sec, run this before blaming the code)
+ - Re-login B2B only (skip AWS):
+      npm run auth:b2b
+ - AWS SSO only:
+      aws sso login --sso-session era
+
+4. RUN PARTS ON THEIR OWN
+      npm run msc          browser: connectivity + SNCF POS + all sectors
+      npm run passes       3 pass searches (search only)
+      npm run booking      only the cart-build / booking-reference test
+      npm run api          LocoHub API check, staging + production (read only)
+      node extra-checks.js Primer, AppFlow, China x2, Dropfile, SF cases (read only)
+      npm run deck         rebuild the manager deck (.pptx)
+      npm run weekly       weekly summary of the last 7 days (weekly-report.md)
+      npm run report       open the last Playwright HTML report
+      npm run verify-routes  check route labels in data\journeys.js (run after any edit)
+
+5. SAFE TESTING OF EMAIL / SLACK (do not post to the live channel)
+      node notify.js --dry-run     show what WOULD be posted/mailed
+      npm run check-slack          check the Slack webhook is alive
+    Env vars (set in the same CMD window, then run; they last until the window closes):
+      set MSC_NO_SLACK=1     skip the Slack post
+      set MSC_NO_MAIL=1      skip opening the mail draft
+      set MSC_SLOT=14:00     force the slot time in the post
+      set MSC_MAX_SECTORS=4  test with only 4 sectors (partial runs are never announced)
+      set HEADED=1           watch the browser
+      set LH_ONLY=production API check on production only
+      (clear one with e.g.:  set MSC_NO_SLACK=)
+
+5b. DROPFILE (Ariane Glue job tf-ariane-prod-transactions-sanity-check, runs daily ~14:00 IST)
+ - Shows how it read in the last 36 hours (0 = OK, 1 or more = KO):
+      powershell -Command "$s=[DateTimeOffset]::UtcNow.AddHours(-36).ToUnixTimeMilliseconds(); aws logs filter-log-events --log-group-name /aws-glue/jobs/output --filter-pattern Discrepancies --start-time $s --query events[].message --region eu-west-1 --profile ariane-prod --output text"
+ - If KO: download VerificationLineDropfile.csv from S3 bucket
+   tf-ariane-prod-transactions-archive-files, folder sanity-check/YYYY-MM/ (see Confluence page).
+ - Run before 14:00 IST uses the previous day's result.
+ - Our role can read run history of only 6 of 21 Ariane jobs, so failed jobs still come
+   from Slack #ariane-alerts-prod.
+
+6. IF THE RUN IS STUCK (seen 4 Oct)
+ - Symptom: sits at "2/5 API searchability" for many minutes.
+ - Cause: laptop cannot reach LocoHub (internal 10.x addresses) = VPN / network dropped.
+ - Check (prints True when OK):
+      powershell -Command "(Test-NetConnection production.locohub-prod.aws.raileurope.com -Port 443).TcpTestSucceeded"
+ - Fix: reconnect VPN, press Ctrl+C in the run window (answer Y), then rerun npm run sanity.
+ - Check nothing is left running:
+      tasklist /FI "IMAGENAME eq node.exe"
+ - Kill a leftover run completely (/T = whole process tree):
+      taskkill /F /T /PID <number>
+ - A killed or Ctrl+C run does not send Slack/mail. Booking refs it created stay valid,
+   but a rerun creates new ones - use the NEW refs.
+
+7. VERSIONS
+      node -v          (now v24.18.0)
+      npm -v           (now 12.1.0)
+      npx playwright --version   (now 1.61.1)
+
+8. WHAT THE RESULTS MEAN
+ - Mail subject: OK / KO. KO = an automated item failed OR the booking suite did not
+   capture a booking ref.
+ - "[check manually]" = the run could not verify it (login expired, tool not set up).
+ - Connectivity carriers flagged >15 min are listed for your review. Not a failure.
+ - A sector is only DROPPED/ERROR after the primary route AND all backup routes failed.
+ - Cart order looks jumbled (#1,#3,#5... then #2,#4...): flagged carriers are built last
+   on purpose.
+ - China KO with title "Loading | Rail Europe": portal slow to boot. Wait is now 120s.
+   If you see it again, check the portal by hand and tell Claude.
+ - Point 1 reads OK when B2B was proven by the booking run, even if the B2C API half could
+   not run (then it is listed under "still to check" in the console).
+ - Point 1 showing [check manually] / API not run: look at report\api-searchability.json. If it
+   says "envs": [] the Postman folder was not found. Expected folder:
+   C:\Users\PSalgaonkar\OneDrive - RAILEUROPE\Desktop\Training Material\Postman Collections\LH
+   (or set POSTMAN_DIR).
+
+9. FILES WORTH KNOWING (in C:\Claude\RE\ASC)
+      report\msc-b2b.json            booking refs, sectors in cart, connectivity
+      report\msc-extras.json         China / Primer / AppFlow / Dropfile results
+      report\api-searchability.json  API results
+      report\sanity-mail.txt         the last mail draft text
+      run-history.jsonl              one line per full run
+      README.md                      full documentation
+      versions.txt                   libraries and versions (not committed)
