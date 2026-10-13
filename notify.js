@@ -176,8 +176,6 @@ async function postSlack(text) {
 
 // --- Mail ---------------------------------------------------------------------------------
 const MANUAL = '[check manually]';
-const TRACKER = process.env.SANITY_TRACKER_URL
-  || 'https://raileuropegroupe.sharepoint.com/:x:/r/sites/msteams_a1643b/_layouts/15/Doc.aspx?sourcedoc=%7B249BB009-BF41-4D32-8AA2-83A53B899359%7D&file=Sanity%20Tracker.xlsx&action=default&mobileredirect=true';
 
 function fromExtra(r, okText = 'OK') {
   if (!r || extras.runId && process.env.MSC_RUN_ID && extras.runId !== process.env.MSC_RUN_ID) return { v: MANUAL, ok: null, note: 'not checked this run' };
@@ -271,15 +269,12 @@ function buildMail(items) {
 <table style="border-collapse:collapse;font-family:inherit;font-size:inherit">
 ${rowHtml}
 </table>
-<p><br>Details Sanity check result:-</p>
-<p><a href="${esc(TRACKER)}">Sanity Tracker.xlsx</a></p>
 </div>`;
 
   const text = [
     'Hello All,', '',
     `Please find today's sanity check result done at ${slot} IST`, '',
     ...items.map((it, n) => `${n + 1}. ${it.label}${it.link ? ': ' + it.link : (it.sep || '  :- ') + it.v}`),
-    '', 'Details Sanity check result:-', '', 'Sanity Tracker.xlsx (' + TRACKER + ')',
   ].join('\r\n');
 
   return { subject, html, text, status };

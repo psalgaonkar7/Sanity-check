@@ -165,7 +165,6 @@ function stat(slide, x, y, w, big, small, color) {
     "Connectivity status page", "All connectivity carriers — search to booking reference",
     "Salesforce – ERA sync (Groups)", "China portal login",
     "SNCF Connect key-account search", "Daily dropfile check",
-    "Record in the Sanity Tracker",
   ];
   const cw = 5.9, ch = 0.82, gx = 0.33, gy = 0.22, x0 = 0.6, y0 = 2.4;
   items.forEach((it, i) => {
@@ -193,7 +192,6 @@ function stat(slide, x, y, w, big, small, color) {
     [cell("All connectivity carriers — search to booking reference"), AUTO(), cell(` sectors +  passes → booking ref per order; stops at Traveler Details`)],
     [cell("Passes — search + add-to-cart"), AUTO(), cell("Interrail / Swiss / BritRail — all searched AND in the booking")],
     [cell("SNCF Connect key-account search"), AUTO(), cell("POS 832072551 · search-only")],
-    [cell("Record in the Sanity Tracker"), READY(), cell("JSON + Markdown reports auto-written")],
     [cell("Salesforce – ERA sync (Groups)"), MAN(), cell("Needs AWS AppFlow access")],
     [cell("China portal login"), MAN(), cell("Needs China portal session")],
     [cell("Daily dropfile check"), MAN(), cell("Separate process / file access")],
@@ -201,7 +199,7 @@ function stat(slide, x, y, w, big, small, color) {
   s.addTable(rows, { x: 0.6, y: 1.7, w: 12.13, colW: [5.0, 2.0, 5.13], rowH: 0.47, border: { pt: 1, color: LINE }, align: "left", valign: "middle", margin: [3, 7, 3, 7] });
   s.addText([
     { text: "4 of the SOP's core checks are fully automated", options: { bold: true, color: GREEN } },
-    { text: "  ·  1 ready to add  ·  3 remain manual (need access).", options: { color: MUTED } },
+    { text: "  ·  3 remain manual (need access).", options: { color: MUTED } },
   ], { x: 0.6, y: 6.95, w: 12, h: 0.35, fontFace: SANS, fontSize: 12.5, margin: 0 });
 })();
 
@@ -337,7 +335,6 @@ function stat(slide, x, y, w, big, small, color) {
   s.addShape(pres.shapes.OVAL, { x: 7.05, y: 2.15, w: 0.4, h: 0.4, fill: { color: RED } });
   s.addText("Planned (needs access / approval)", { x: 7.6, y: 2.12, w: 5.0, h: 0.45, fontFace: SANS, fontSize: 17, bold: true, color: INK, margin: 0 });
   s.addText([
-    { text: "Auto-fill the Sanity Tracker Excel", options: { bullet: true, breakLine: true } },
     { text: "Salesforce – ERA sync check  (AWS access)", options: { bullet: true, breakLine: true } },
     { text: "China portal login check", options: { bullet: true, breakLine: true } },
     { text: "Daily dropfile check", options: { bullet: true, breakLine: true } },
