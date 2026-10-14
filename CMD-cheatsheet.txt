@@ -14,21 +14,27 @@ Folder: C:\Claude\RE\ASC     Repo: github.com/psalgaonkar7/Sanity-check
       and Dropfile sanity check items read [check manually].
     - One AWS login (sso-session "era") covers both AWS profiles the sanity run uses:
       era-prod (AppFlow) and ariane-prod (dropfile).
- b) Run the sanity check (about 5.5 min):
+ b) Run the sanity check (about 6 min; keep it in 5-10 min):
       cd C:\Claude\RE\ASC
       npm run sanity
-    - Needs the VPN / corporate network connected (API step reaches LocoHub).
+    - It starts with a ~20 s PRE-FLIGHT: code version, B2B login, VPN, AWS, portal logins.
+      If the B2B login has expired it stops straight away: run  npm run auth  first.
+    - A second  npm run sanity  while one is running is refused (run lock).
+    - Needs the VPN / corporate network connected (API step reaches LocoHub). Without it the
+      API step is skipped in 5 s and point 1 says "B2C API not checked".
     - Last step posts the "Sanity done" line to Slack and opens the Outlook draft.
     - Paste the email body (Ctrl+V), review, press Send yourself.
-    - The mail has 9 points, each OK or KO:
-        1 B2C & B2B check   2 B2B connectivity   3 Group Bookings-Salesforce Sync
-        4 Key account China 5 Customer care China 6 SNCF   7 Primer
-        8 Dropfile sanity check   9 SF cases (shows 0 until Salesforce is approved)
+    - The subject has NO booking refs. The mail has 11 points, each OK or KO with its proof:
+        1 B2C & B2B check (booking refs are here)   2 B2B connectivity   3 Group Bookings-SF Sync
+        4 Key account ROW   5 Agents portal ROW   6 Key account China   7 Customer care China
+          (4-7: a logged-in search on each portal, e.g. "Paris->Bordeaux: 7 results")
+        8 SNCF   9 Primer   10 Dropfile sanity check   11 SF cases (0 until Salesforce is approved)
+    - A KO line shows its reason right in the mail.
  c) By hand each run (the tool cannot do these):
       - Slack #ariane-alerts-prod: any failed Glue job? If yes raise a Jira SR for the
         third-party team. (Procedure: Confluence SR page 2223472642; recording in
         #team-application-support)
-      - SF case count (point 9)
+      - SF case count (point 11)
 
 2. IF "node" IS NOT RECOGNISED IN CMD
       set "PATH=C:\Users\PSalgaonkar\AppData\Local\nodejs-portable\node-v24.18.0-win-x64;%PATH%"
@@ -39,6 +45,12 @@ Folder: C:\Claude\RE\ASC     Repo: github.com/psalgaonkar7/Sanity-check
       node check-login.js            (about 10 sec, run this before blaming the code)
  - Re-login B2B only (skip AWS):
       npm run auth:b2b
+ - A portal line (4-7) says [check manually] / its saved login expired. Save the 4 other
+   portals' logins (opens a window ONLY for the ones that need it; same username/password):
+      npm run auth:portals
+   (Kept out of  npm run auth  on purpose. No portal accepts another portal's login.)
+ - Quick look at everything before a run (also runs automatically at the start of sanity):
+      npm run preflight
  - AWS SSO only:
       aws sso login --sso-session era
 
@@ -47,7 +59,7 @@ Folder: C:\Claude\RE\ASC     Repo: github.com/psalgaonkar7/Sanity-check
       npm run passes       3 pass searches (search only)
       npm run booking      only the cart-build / booking-reference test
       npm run api          LocoHub API check, staging + production (read only)
-      node extra-checks.js Primer, AppFlow, China x2, Dropfile, SF cases (read only)
+      node extra-checks.js Primer, AppFlow, 4 portal searches, Dropfile, SF cases (read only)
       npm run deck         rebuild the manager deck (.pptx)
       npm run weekly       weekly summary of the last 7 days (weekly-report.md)
       npm run report       open the last Playwright HTML report
@@ -62,6 +74,9 @@ Folder: C:\Claude\RE\ASC     Repo: github.com/psalgaonkar7/Sanity-check
       set MSC_SLOT=14:00     force the slot time in the post
       set MSC_MAX_SECTORS=4  test with only 4 sectors (partial runs are never announced)
       set HEADED=1           watch the browser
+      set MSC_PORTAL_BOOKINGS=1   ALSO do the full 22-item booking on the 4 other portals
+                                   (adds ~20 min - only to dig into one suspect portal)
+      set MSC_PORTAL_ONLY=chinaKeyAccount,rowAgent   limit those bookings to some portals
       set LH_ONLY=production API check on production only
       (clear one with e.g.:  set MSC_NO_SLACK=)
 
@@ -100,8 +115,9 @@ Folder: C:\Claude\RE\ASC     Repo: github.com/psalgaonkar7/Sanity-check
  - A sector is only DROPPED/ERROR after the primary route AND all backup routes failed.
  - Cart order looks jumbled (#1,#3,#5... then #2,#4...): flagged carriers are built last
    on purpose.
- - China KO with title "Loading | Rail Europe": portal slow to boot. Wait is now 120s.
-   If you see it again, check the portal by hand and tell Claude.
+ - Portal lines (4-7) log in and SEARCH; a sign-in page alone no longer counts as OK.
+   A KO there names the error the page showed. Slow suggestions are retried once.
+   If you see a KO, check that portal by hand and tell Claude.
  - Point 1 reads OK when B2B was proven by the booking run, even if the B2C API half could
    not run (then it is listed under "still to check" in the console).
  - Point 1 showing [check manually] / API not run: look at report\api-searchability.json. If it

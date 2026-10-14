@@ -5,6 +5,8 @@
   "scripts": {
     "auth": "node auth.js",
     "auth:b2b": "playwright test --project=setup --headed",
+    "auth:portals": "node auth-portals.js",
+    "preflight": "node preflight.js",
     "msc": "playwright test --project=b2b tests/b2b-msc.spec.js",
     "passes": "playwright test --project=b2b tests/b2b-passes.spec.js",
     "booking": "playwright test --project=b2b tests/b2b-msc.spec.js -g \"build cart\"",

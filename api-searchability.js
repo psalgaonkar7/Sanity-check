@@ -75,6 +75,17 @@ function usableToken(t) { return !!t && t.length > 20 && !/^(see |\{\{)/i.test(t
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+/** Plain TCP connect test, so an unreachable endpoint is known in seconds, not minutes. */
+function canConnect(host, port, timeoutMs) {
+  return new Promise((resolve) => {
+    const s = require('net').connect({ host, port });
+    const done = (ok, error) => { s.destroy(); resolve({ ok, error }); };
+    s.setTimeout(timeoutMs, () => done(false, `no answer in ${timeoutMs / 1000}s`));
+    s.once('connect', () => done(true));
+    s.once('error', (err) => done(false, err.code || err.message));
+  });
+}
+
 /** Run fn over items with limited concurrency; preserves input order in the result. */
 async function mapPool(items, size, fn) {
   const out = new Array(items.length);
@@ -140,6 +151,12 @@ async function searchOne(endpoint, token, od, dateStr) {
   const dateStr = futureDate(DAYS_AHEAD);
   console.log(`\nLocoHub API searchability — read-only — travel date ${dateStr} (+${DAYS_AHEAD}d), 1 adult\n`);
   const reportEnvs = [];
+  const unreachable = [];
+  // Stamp the report as "started, nothing yet" straight away: if this process crashes before it
+  // finishes, the mail must not pick up yesterday's results as if they were today's.
+  fs.mkdirSync(path.join(__dirname, 'report'), { recursive: true });
+  fs.writeFileSync(path.join(__dirname, 'report', 'api-searchability.json'),
+    JSON.stringify({ runId: process.env.MSC_RUN_ID || null, generatedFor: dateStr, envs: [], unreachable: [], incomplete: true }, null, 2));
 
   for (const e of ENVS) {
     if (only && e.label !== only) continue;
@@ -150,6 +167,21 @@ async function searchOne(endpoint, token, od, dateStr) {
     console.log(`### ${e.label}  (${env.name})`);
     console.log(`    endpoint: ${endpoint}`);
     if (!usableToken(token)) { console.log('    -> no literal token in this env file (uses SSM); SKIPPED\n'); continue; }
+
+    // LocoHub only answers on internal (10.x) addresses, i.e. on the VPN. Without it every
+    // search waits out its 45 s timeout, retries, then tries every fallback — on 2026-10-04 that
+    // left the run "stuck" at this step for 20+ minutes. A 5 s connect test turns that into an
+    // immediate, explained skip.
+    let u;
+    try { u = new URL(endpoint); } catch { console.log('    -> no usable "endpoint" in this env file; SKIPPED\n'); continue; }
+    const host = u.hostname;
+    const port = Number(u.port) || (u.protocol === 'http:' ? 80 : 443);
+    const reach = await canConnect(host, port, 5000);
+    if (!reach.ok) {
+      console.log(`    -> cannot reach ${host}:${port} (${reach.error}) — VPN / corporate network not connected? SKIPPED\n`);
+      unreachable.push({ label: e.label, host, error: reach.error });
+      continue;
+    }
 
     // Fire all 12 routes concurrently (read-only search) — far faster than one-by-one,
     // and one slow/dead route no longer holds up the rest.
@@ -215,7 +247,8 @@ async function searchOne(endpoint, token, od, dateStr) {
   // Persist machine-readable + markdown report (no secrets).
   const outDir = path.join(__dirname, 'report');
   if (!fs.existsSync(outDir)) fs.mkdirSync(outDir, { recursive: true });
-  fs.writeFileSync(path.join(outDir, 'api-searchability.json'), JSON.stringify({ generatedFor: dateStr, envs: reportEnvs }, null, 2));
+  fs.writeFileSync(path.join(outDir, 'api-searchability.json'), JSON.stringify({ runId: process.env.MSC_RUN_ID || null, generatedFor: dateStr, envs: reportEnvs, unreachable }, null, 2));
+  if (unreachable.length && !reportEnvs.length) process.exitCode = 1;
 
   let md = `# Rail Europe MSC — API Searchability (read-only)\n\n`;
   md += `Travel date tested: **${dateStr}** (+${DAYS_AHEAD} days), 1 adult. Source: LocoHub \`POST /searches\`.\n`;

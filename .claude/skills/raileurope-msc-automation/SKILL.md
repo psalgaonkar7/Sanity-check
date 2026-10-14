@@ -75,6 +75,15 @@ in `extra-checks.js` needs its own separate login — skipping/cancelling that s
 it never blocks the B2B login that follows. If only the B2B session needs refreshing, tell
 them `npm run auth:b2b` instead, which skips the AWS step entirely.
 
+The four other portals (key account / agents ROW, key account / customer care China) each need
+their own saved login — **no portal accepts another's** (tested 2026-10-14). Those are made by a
+separate `npm run auth:portals` (a window only for the expired ones; the user signs in), **not**
+by `npm run auth`, which must stay AWS SSO + B2B only. Never type their credentials either.
+
+`npm run sanity` starts with `preflight.js` and a run lock (`report/.run.lock`): it stops if the
+B2B login has expired and refuses to start while another run is going. **Before running anything
+that writes `report/` yourself, check for a live run** — the user starts runs at any time.
+
 ## What it checks
 
 1. **B2B browser suite** (`tests/b2b-msc.spec.js`, `tests/b2b-passes.spec.js`):
@@ -89,8 +98,12 @@ them `npm run auth:b2b` instead, which skips the AWS step entirely.
    B2C itself is anti-bot blocked.
 3. **Manager deck** (`deck/gen.js`) and **run history** (`log-run.js` → `npm run weekly`).
 4. **Extra checks** (`extra-checks.js`, in parallel): Primer status API, AppFlow
-   `tf-era-prod-shared-salesforce-flow` (Group Bookings–SF sync), both China portals, and the
-   SF *Technical HD view* case count. Each degrades to SKIPPED with a fix when a login lapses.
+   `tf-era-prod-shared-salesforce-flow` (Group Bookings–SF sync), the Ariane dropfile Glue result,
+   a **logged-in train search on each of the 4 other portals** (`lib/portals.js`; a sign-in page
+   alone is NOT OK — that is how the 12–14 Oct 2026 China search outage read OK), and the SF
+   *Technical HD view* case count. Each degrades to SKIPPED with a fix when a login lapses.
+   The full 22-item booking on those portals is **opt-in** (`MSC_PORTAL_BOOKINGS=1`): it made the
+   run 27.5 min and was rejected — keep the default run at ~6 min.
 5. **Slack + mail** (`notify.js`, last step): posts `Sanity done HH:MM IST- <refs>` to
    #sd_24-7 via `SLACK_WEBHOOK_URL` in `.env`, and opens the sanity mail as an Outlook draft.
 
@@ -104,8 +117,13 @@ them `npm run auth:b2b` instead, which skips the AWS step entirely.
 - When testing, use `node notify.js --dry-run` or set `MSC_NO_SLACK=1` / `MSC_NO_MAIL=1`.
   Do not post test messages to #sd_24-7: it is the team's live channel.
 - AppFlow is **event**-triggered — "no recent run" is not a failure; only a failed run is.
-- The China check must **not** use `blockNoise()` — the key-account `.cn` portal never boots
-  without the hosts it blocks, so it would read as down on every run.
+- The `.cn` portals must **not** use `blockNoise()` — the key-account `.cn` portal never boots
+  without the hosts it blocks, so it would read as down on every run (`china: true` in
+  `lib/portal-list.js` turns it off).
+- The mail has **11 points, no booking refs in the subject** (refs sit on point 1), each OK/KO
+  with its proof in brackets and a KO showing its reason. Point 1 may read OK when only the B2C API
+  half could not run (VPN) — it then says "B2C API not checked". Don't change this layout without
+  Pratikesh asking.
 
 ## Fallback routes — read before reporting a sector as failed
 

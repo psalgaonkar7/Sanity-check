@@ -8,7 +8,7 @@ const REPORT = path.join(__dirname, 'report');
 const read = (f) => { try { return JSON.parse(fs.readFileSync(path.join(REPORT, f), 'utf8')); } catch { return null; } };
 
 const b2b = read('msc-b2b.json') || {};
-const api = read('api-searchability.json') || {};
+const api = (() => { const r = read('api-searchability.json') || {}; return ((process.env.MSC_RUN_ID && r.runId && r.runId !== process.env.MSC_RUN_ID) || r.incomplete) ? {} : r; })();
 const env = (label) => (api.envs || []).find((e) => e.label === label);
 const prod = env('PRODUCTION');
 const stg = env('STAGING');
@@ -16,8 +16,15 @@ const stg = env('STAGING');
 const line = (ch = '─') => ch.repeat(72);
 const check = (ok) => (ok ? '[PASS]' : ok === false ? '[FAIL]' : '[ -- ]');
 
+const ex = read('msc-extras.json') || {};
+const pf = read('preflight.json');
+
 console.log('\n' + line('='));
 console.log(' RAIL EUROPE MSC — SANITY RUN SUMMARY');
+if (pf && pf.version) {
+  const v = pf.version;
+  console.log(` code: commit ${v.commit}${v.edits ? ` · ${v.edits} local edit(s)` : ''}${v.behind ? ` · ${v.behind} commit(s) behind GitHub — git pull` : ''}`);
+}
 console.log(line('='));
 
 if (b2b.booking) {
@@ -59,6 +66,28 @@ const testable = (e) => (e.summary.testable != null ? e.summary.testable : e.row
 const skipNote = (e) => (e.summary.skipped ? ` (+${e.summary.skipped} skipped — no inventory there)` : '');
 console.log(` API — Production               ${check(prod ? prod.summary.pass === testable(prod) : null)} ${prod ? `${prod.summary.pass}/${testable(prod)}${skipNote(prod)}` : 'n/a'}`);
 console.log(` API — Staging                  ${check(stg ? stg.summary.pass === testable(stg) : null)} ${stg ? `${stg.summary.pass}/${testable(stg)}${skipNote(stg)}` : 'n/a'}`);
+if ((api.unreachable || []).length) console.log(`   (API not reachable: ${api.unreachable.map((u) => u.label).join(', ')} — VPN?)`);
+// Other portals: the same full booking on each (report/msc-b2b-<key>.json), with the logged-in
+// search check (extra-checks.js) as the fallback when no booking report exists for this run.
+const portalRuns = (read('portal-runs.json') || {}).portals || {};
+for (const [key, label] of [['rowKeyAccount', 'Key account ROW'], ['rowAgent', 'Agents portal ROW'],
+  ['chinaKeyAccount', 'Key account China'], ['chinaCustomerCare', 'Customer care China']]) {
+  const bk = read(`msc-b2b-${key}.json`);
+  const run = portalRuns[key];
+  if (bk && (!b2b.runId || bk.runId === b2b.runId)) {
+    const prefs = (bk.bookings || []).map((x) => x.ref).filter(Boolean);
+    const items = (bk.bookings || []).reduce((n, x) => n + (x.items || 0), 0);
+    const lost = (bk.sectors || []).filter((s) => s.status !== 'IN CART' && s.status !== 'EXPECTED (carrier flagged)');
+    const anyExpired = (bk.bookings || []).some((x) => x.expired > 0);
+    const portalOk = prefs.length > 0 && !anyExpired && !(run && run.ran && run.code !== 0);
+    console.log(` ${label.padEnd(31)}${check(portalOk)} ${prefs.join(', ') || 'no booking reference'}  (${items} items${run && run.seconds ? ', ' + (run.seconds / 60).toFixed(1) + ' min' : ''}${anyExpired ? ', EXPIRED items' : ''})`
+      + (lost.length ? `  ⚠ not added: ${lost.map((s) => s.carrier).join(', ')}` : ''));
+    continue;
+  }
+  const r = ex[key];
+  if (run && run.ran === false) console.log(` ${label.padEnd(31)}${check(null)} no saved login — run: npm run auth:portals`);
+  else if (r) console.log(` ${(label + ' search').padEnd(31)}${check(r.status === 'OK' ? true : r.status === 'SKIPPED' ? null : false)} ${r.detail || ''}`);
+}
 
 if (Array.isArray(b2b.sectors) && b2b.sectors.length) {
   const EXPECTED = 'EXPECTED (carrier flagged)';

@@ -35,6 +35,11 @@ const DATA = {
     sncfConnect: '832072551',          // KA-RESAS-EUROPE-FRANCE (SNCF Connect agency)
   },
 
+  // Search-only routes for the portal check (key account / agents / China portals — see
+  // lib/portals.js). Three different carriers, so one carrier being down can't fail a portal:
+  // the portal is only KO when a search returns nothing on ALL of them. Ids refer to ptpJourneys.
+  portalSearchJourneyIds: [19, 4, 1],   // Paris->Bordeaux (SNCF), London->Paris (Eurostar), Vienna->Munich (OBB)
+
   ptpJourneys: [
     { id: 1,  carrier: 'OBB',              connectivityNames: ['OBB'],              carrierSlug: 'obb',
       fromCode: 'AT:vienna', toCode: 'DE:munich',

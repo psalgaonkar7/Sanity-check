@@ -38,7 +38,14 @@ module.exports = defineConfig({
   // and why it looked intermittent rather than reproducible.
   workers: 1,
   retries: 0,
-  reporter: [
+  // A portal run (PORTAL=<key>, opt-in) writes to its own folders: Playwright wipes outputDir at
+  // the start of a run and the HTML reporter wipes its folder, which would otherwise destroy the
+  // main run's failure traces/videos and results.json.
+  outputDir: process.env.PORTAL ? `test-results/portal-${process.env.PORTAL}` : 'test-results',
+  reporter: process.env.PORTAL ? [
+    ['list'],
+    ['json', { outputFile: `report/results-portal-${process.env.PORTAL}.json` }],
+  ] : [
     ['list'],
     // HTML report lives in its own subfolder — the HTML reporter CLEANS its outputFolder on
     // start, so keeping it out of report/ stops it wiping our JSON data files (msc-b2b.json etc).
@@ -56,6 +63,25 @@ module.exports = defineConfig({
     viewport: { width: 1366, height: 900 },
   },
   projects: [
+    // Full booking run (all sectors + passes -> carts -> booking refs) on ONE of the other
+    // portals, chosen with PORTAL=<key> (see lib/portal-list.js). run-sanity.js starts one of
+    // these per portal, strictly after the main customercare run (shared account/cart).
+    // Each uses its own saved login (auth/<key>.json, made by `npm run auth:portals`).
+    ...(process.env.PORTAL ? (() => {
+      const p = require('./lib/portal-list').PORTALS.find((x) => x.key === process.env.PORTAL);
+      if (!p) throw new Error(`unknown PORTAL "${process.env.PORTAL}"`);
+      return [{
+        name: 'portal',
+        testMatch: /b2b-msc\.spec\.js/,
+        grep: /build carts/,
+        use: {
+          baseURL: p.url,
+          storageState: `auth/${p.key}.json`,
+          // The .cn portals boot slowly (8-30 s per page) — give every action more room.
+          ...(p.china ? { actionTimeout: 60000, navigationTimeout: 90000 } : {}),
+        },
+      }];
+    })() : []),
     {
       name: 'setup',
       testMatch: /auth\.setup\.js/,

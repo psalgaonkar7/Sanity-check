@@ -11,6 +11,13 @@ const { test, expect } = require('@playwright/test');
 const data = require('../data/journeys');
 const H = require('../lib/helpers');
 
+// PORTAL=<key> (set by run-sanity.js, project "portal" in playwright.config.js) runs ONLY the
+// booking test against another portal (key account / agents ROW, China), saving its results to
+// report/msc-b2b-<key>.json so the main customercare report is never touched.
+const PORTAL = process.env.PORTAL
+  ? require('../lib/portal-list').PORTALS.find((p) => p.key === process.env.PORTAL) : null;
+const REPORT_FILE = PORTAL ? `report/msc-b2b-${PORTAL.key}.json` : 'report/msc-b2b.json';
+
 const DATE = H.futureDate(data.daysAhead);
 const report = { date: new Date().toISOString(), testDate: DATE, connectivity: [], sncfPos: [], booking: null, sectors: [], issues: [] };
 
@@ -41,7 +48,7 @@ function persist() {
   fs.mkdirSync('report', { recursive: true });
   let existing = null;
   try {
-    const onDisk = JSON.parse(fs.readFileSync('report/msc-b2b.json', 'utf8'));
+    const onDisk = JSON.parse(fs.readFileSync(REPORT_FILE, 'utf8'));
     if (onDisk.runId && onDisk.runId === RUN_ID) existing = onDisk;
   } catch {}
   const merged = existing ? {
@@ -65,11 +72,13 @@ function persist() {
     issues: [...(existing.issues || []), ...report.issues].filter((v, i, arr) =>
       arr.findIndex((x) => JSON.stringify(x) === JSON.stringify(v)) === i),
   } : report;
-  fs.writeFileSync('report/msc-b2b.json', JSON.stringify(merged, null, 2));
+  if (PORTAL) { merged.portal = PORTAL.key; merged.portalUrl = PORTAL.url; }
+  fs.writeFileSync(REPORT_FILE, JSON.stringify(merged, null, 2));
 }
 
 // Drop unreachable third-party analytics/AB hosts; they add ~38s per page load here.
-test.beforeEach(async ({ context }) => { await H.blockNoise(context); });
+// Not on the China portals: the key-account .cn portal never boots without those hosts.
+test.beforeEach(async ({ context }) => { if (!(PORTAL && PORTAL.china)) await H.blockNoise(context); });
 
 test.afterEach(persist);   // flush as we go, so a worker swap can't lose completed work
 test.afterAll(persist);
@@ -234,7 +243,7 @@ async function clearCart(page) {
 test('B2B: build carts and capture booking references (none expired)', async ({ page }) => {
   // Several orders, each up to 15 items — give the whole thing room rather than being killed
   // mid-batch with only part of the coverage recorded.
-  test.setTimeout(30 * 60 * 1000);
+  test.setTimeout(PORTAL ? 15 * 60 * 1000 : 30 * 60 * 1000);   // a stuck portal must not hold the whole run for 30 min
   await clearCart(page);
   await page.goto('/home');
   // Wait for the search form to actually be ready before the loop starts hammering it.
@@ -266,6 +275,8 @@ test('B2B: build carts and capture booking references (none expired)', async ({ 
   // got labelled ERROR because the POS test's failure had swapped the worker underneath it.
   // Fall back to the run-id-matched on-disk report (same gate persist() uses) when the
   // in-memory list is empty, so a worker swap can't blind this classification.
+  // (A portal run has no pre-flight of its own — it reads the main run's list, always the
+  // customercare report of the same run id.)
   let escalations = report.connectivityEscalations;
   if (!escalations || !escalations.length) {
     try {

@@ -1,5 +1,7 @@
 node_modules/
 storageState.json
+# Saved portal logins (made by npm run auth:portals) — live sessions, never commit.
+auth/
 inspect*.js
 # One-off diagnostic/exploration scripts only — NOT api-searchability.js (that's core, tracked).
 api-find.js

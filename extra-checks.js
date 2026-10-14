@@ -3,8 +3,9 @@
 //
 //   Primer status page            public Statuspage API
 //   Group Bookings – SF sync      AWS AppFlow, via the AWS CLI (era-prod SSO profile)
-//   Key account China             portal renders its sign-in page
-//   Customer care China           portal renders its sign-in page
+//   Key account / Agents ROW,     logged in with a saved session, a real search returns trains
+//   Key account / Customer care   (lib/portals.js; sessions saved by `npm run auth:portals`)
+//   China
 //   SF cases not linked with SR   Salesforce "Technical HD view" list view, via the sf CLI
 //
 // All read-only. Nothing here touches the B2B .com account, cart or POS, which is why it is
@@ -151,56 +152,25 @@ async function checkDropfile() {
 }
 
 // ---------------------------------------------------------------------------------------
-// China portals — both are single-page apps that answer HTTP 200 with a bare "Loading" shell
-// whether or not the app works, so a status code proves nothing. The check waits for the
-// sign-in form to actually render.
-//
-// Deliberately NOT using helpers.blockNoise(): it aborts kameleoon/quantummetric to speed up
-// the .com portal, and the key-account .cn portal never finishes booting without them —
-// verified 2026-09-27: stuck on "Loading" with blockNoise, sign-in form in 5 s without it.
-// Using it here would report the key-account portal as down on every run.
-//
-// This proves the portal is up and serving its app. It does not prove a login succeeds —
-// that would need a saved .cn session, and is labelled as such in the mail.
+// Portals — key account ROW, agents ROW, key account China, customer care China. Each is
+// logged in with its own saved session and must return trains for a real search; see
+// lib/portals.js for why "the sign-in page loads" is no longer accepted as OK. Run one after
+// another in their own browser contexts, so they never touch the B2B account/cart/POS used by
+// the booking run.
 // ---------------------------------------------------------------------------------------
-const CN = [
-  { key: 'chinaKeyAccount', label: 'Key account China', url: 'https://www.era.raileurope.cn' },
-  { key: 'chinaCustomerCare', label: 'Customer care China', url: 'https://www.customercare.raileurope.cn' },
-];
-
-async function checkChina() {
+async function checkPortals() {
+  const P = require('./lib/portals');
   const out = {};
   let chromium;
   try { ({ chromium } = require('@playwright/test')); } catch {
-    for (const c of CN) out[c.key] = { status: 'SKIPPED', detail: 'Playwright not installed' };
+    for (const p of P.PORTALS) out[p.key] = { status: 'SKIPPED', detail: 'Playwright not installed' };
     return out;
   }
+  const H = require('./lib/helpers');
+  const dateStr = H.futureDate(require('./data/journeys').daysAhead);
   const browser = await chromium.launch();
   try {
-    for (const c of CN) {
-      const ctx = await browser.newContext();
-      const page = await ctx.newPage();
-      const t0 = Date.now();
-      try {
-        // era.raileurope.cn loads 200+ separate JS chunks before the sign-in form appears,
-        // and how long that takes varies a lot run to run — reproduced live both at ~6s and
-        // at >30s. 30s was flagging it KO on real, accessible runs (confirmed manually both
-        // times) purely because of that variance, not an actual outage. 60s was still not
-        // enough on 2026-10-04 (timed out at the full 60s, manual login fine), so the form wait
-        // is now 120s. It costs nothing on fast runs: waitFor returns the moment the form shows.
-        await page.goto(c.url, { waitUntil: 'domcontentloaded', timeout: 60000 });
-        await page.locator('input[type="password"]').first().waitFor({ state: 'visible', timeout: 120000 });
-        out[c.key] = { status: 'OK', detail: `sign-in page rendered in ${((Date.now() - t0) / 1000).toFixed(1)}s`, url: c.url };
-      } catch (e) {
-        const title = await page.title().catch(() => '');
-        out[c.key] = {
-          status: 'NOT OK',
-          detail: `sign-in page did not render within 120s (title "${title}"): ${String(e).split('\n')[0].slice(0, 90)}`,
-          url: c.url,
-        };
-      }
-      await ctx.close();
-    }
+    for (const p of P.PORTALS) out[p.key] = await P.checkPortal(browser, p, dateStr);
   } finally {
     await browser.close();
   }
@@ -252,15 +222,17 @@ async function checkSalesforce() {
 
 // ---------------------------------------------------------------------------------------
 async function main() {
-  const [primer, appflow, dropfile, china, sfCases] = await Promise.all([checkPrimer(), checkAppFlow(), checkDropfile(), checkChina(), checkSalesforce()]);
-  const result = { runId: process.env.MSC_RUN_ID || null, at: new Date().toISOString(), primer, appflow, dropfile, ...china, sfCases };
+  const [primer, appflow, dropfile, portals, sfCases] = await Promise.all([checkPrimer(), checkAppFlow(), checkDropfile(), checkPortals(), checkSalesforce()]);
+  const result = { runId: process.env.MSC_RUN_ID || null, at: new Date().toISOString(), primer, appflow, dropfile, ...portals, sfCases };
   fs.mkdirSync(REPORT, { recursive: true });
   fs.writeFileSync(OUT, JSON.stringify(result, null, 2));
   const rows = [
     ['Primer status page', primer],
     ['Group Bookings–SF sync (AppFlow)', appflow],
-    ['Key account China', result.chinaKeyAccount],
-    ['Customer care China', result.chinaCustomerCare],
+    ['Key account ROW (search)', result.rowKeyAccount],
+    ['Agents portal ROW (search)', result.rowAgent],
+    ['Key account China (search)', result.chinaKeyAccount],
+    ['Customer care China (search)', result.chinaCustomerCare],
     ['Dropfile sanity check (Glue)', dropfile],
     ['SF cases not linked with an SR', sfCases],
   ];

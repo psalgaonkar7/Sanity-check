@@ -34,8 +34,11 @@ export PATH="C:/Users/PSalgaonkar/AppData/Local/nodejs-portable/node-v24.18.0-wi
 **If every check times out, the login has expired** — it does not look like a login error.
 Run `node check-login.js` (10s) before blaming the code; see Troubleshooting in `README.md`.
 
-Other entry points: `npm run auth`, `npm run deck` (regenerates the manager deck into
-`RE/docs/Rail-Europe-MSC-Automation-Overview.pptx`).
+Other entry points: `npm run auth` (AWS SSO + B2B only), `npm run auth:portals` (the 4 other
+portals' saved logins — rarely needed, separate on purpose), `npm run preflight`, `npm run deck`
+(regenerates the manager deck into `RE/docs/Rail-Europe-MSC-Automation-Overview.pptx`).
+The sanity must stay at **~6 min** (5–10): the opt-in full bookings on the other portals
+(`MSC_PORTAL_BOOKINGS=1`) take it to ~27 min and were rejected as the default.
 
 ## ⚠ Rules that have already cost us
 
