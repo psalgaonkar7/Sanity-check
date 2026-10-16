@@ -17,9 +17,9 @@ test('capture B2B login session', async ({ page }) => {
   await page.goto('https://customercare.raileurope.com/home');
   await H.dismissCookies(page); // clear the cookie banner so it doesn't block the login form
 
-  // Wait until the logged-in home shows the user name top-right (whoever is signing in).
+  // Wait until the logged-in home shows the account name top-right.
   // (If the session timed out you'll see the Sign in page — just sign in; we keep waiting.)
-  await expect(page.locator(H.SEL.userName).first()).toBeVisible({ timeout: 5 * 60 * 1000 });
+  await expect(page.getByText(/Salgaonkar/i).first()).toBeVisible({ timeout: 5 * 60 * 1000 });
 
   await page.context().storageState({ path: 'storageState.json' });
   console.log('\n[auth] Session saved to storageState.json — you can now run `npm run msc`.\n');

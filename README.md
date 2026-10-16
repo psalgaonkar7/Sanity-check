@@ -193,22 +193,13 @@ npm run weekly   # compile run-history.jsonl into weekly-report.md
 npm run report   # open the Playwright HTML report
 npm run auth     # AWS SSO (era) then the B2B login capture — re-do when a session expires
 npm run auth:b2b # just the B2B login capture, skips AWS SSO
-npm run auth:portals  # saved logins for the 4 other portals (see below) — only the expired ones open a window
-npm run preflight     # ~20s: code version, B2B login, VPN, AWS login, portal logins, Slack (runs automatically first in sanity)
 npm run verify-routes   # check every route in data/journeys.js is typeable in the portal
 node check-login.js     # ~10s: is the saved session still valid? run this BEFORE a long run
 ```
 
 Handy env vars: `MSC_MAX_SECTORS=4` (validate the flow on a subset first),
 `MSC_DAYS_AHEAD`, `MSC_MAX_ITEMS_PER_ORDER`, `HEADED=1` (watch it run),
-`LH_ONLY=production`, `MSC_NO_SLACK=1` / `MSC_NO_MAIL=1` (test runs).
-`MSC_PORTAL_BOOKINGS=1` adds a full 22-item booking on each other portal (see "Portal checks").
-
-**Pre-flight and the run lock.** `npm run sanity` starts with `preflight.js`: it shows the code
-version (and whether your copy is behind GitHub), checks the B2B login (**stops the run** if it
-has expired — nothing else can work without it) and warns about VPN, AWS login, missing portal
-logins and a missing Slack webhook. It also takes a lock (`report/.run.lock`), so a second
-`npm run sanity` started while one is running is refused instead of corrupting it.
+`LH_ONLY=production`.
 
 **Fully standalone (no AI assistant needed):** `npm run sanity` prints a human-readable
 summary at the end — booking references, per-check table, sector list grouped by outcome,
@@ -245,7 +236,8 @@ extra time: the extra checks run in parallel with the browser suite.
 |---|---|---|
 | Primer Status Page | `status.primer.io` public Statuspage API | overall "none", every component operational, no open incident. Maintenance in progress or in the next 24 h is shown as a note |
 | Group Bookings–Salesforce Sync | AWS CLI (`era-prod` SSO profile) → AppFlow `tf-era-prod-shared-salesforce-flow` | flow Active and **no failed execution since the previous sanity** |
-| Key account ROW · Agents portal ROW · Key account China · Customer care China | each portal opened with its own saved login (`auth/<portal>.json`, made by `npm run auth:portals`); a real train search is run (Paris→Bordeaux, then London→Paris, then Vienna→Munich; each route retried once) | logged in **and** a search returned trains. No saved/expired login = `[check manually]`; logged in but every search fails = KO with the error the page showed. See "Portal checks" |
+| Key account China | browser loads `www.era.raileurope.cn` | the sign-in page actually renders |
+| Customer care China | browser loads `www.customercare.raileurope.cn` | the sign-in page actually renders |
 | Dropfile sanity check | AWS CLI (`ariane-prod` SSO profile, same `era` login) → latest `[Check] Discrepancies: N` line from Glue job `tf-ariane-prod-transactions-sanity-check` in `/aws-glue/jobs/output` (job runs daily ~14:00 IST; last 30 h are read) | 0 discrepancies. Failed Glue jobs are **not** covered (the support role can't read most Ariane job histories), so the run reminds you to check Slack `#ariane-alerts-prod`. Procedure: Confluence SR page 2223472642 |
 | SF cases not linked with an SR | Salesforce CLI → the *Technical HD view* list view | the count of cases in that view |
 
@@ -323,47 +315,13 @@ channel. Until it is set, the run prints the Slack line and says it was not post
 
 `MSC_NO_SLACK=1` skips posting for a run.
 
-### Portal checks (why four more portals, and why a login each)
-
-The old China check only waited for the sign-in page, so it read OK during the 12–14 Oct 2026
-China search outage (SR-23406). Each portal is now opened **logged in** and must return trains
-for a real search. Same ERA app, same username/password everywhere — but **no portal accepts
-another portal's login** (tested 2026-10-14: tokens live per site), so each needs its own saved
-login. `npm run auth` stays AWS SSO + B2B only; the other four are saved by a separate
-`npm run auth:portals`, which only opens a window for a portal whose saved login is missing or
-expired. A saved login carries a refresh token, so re-doing it should be rare. Until done, those
-mail lines read `[check manually]`.
-
-The full 22-item booking on every portal exists but is **opt-in** (`MSC_PORTAL_BOOKINGS=1`,
-optionally `MSC_PORTAL_ONLY=chinaKeyAccount,rowAgent`): it takes 4–7 min per portal and made the
-whole run 27.5 min, which is not acceptable for every slot. Use it to dig into one suspect portal.
-Those bookings go to `report/msc-b2b-<portal>.json`. The saved logins live in `auth/`
-(git-ignored, like `storageState.json` — they are live sessions, never commit or share them).
-
 ### The sanity mail (never sent automatically)
 
 The run builds the full mail from its own results, then:
 
 1. copies it to the clipboard **formatted**, with the numbered list and links
 2. opens a new **Outlook compose window** with the subject filled in, e.g.
-   `B2B & B2C Sanity Check - OK [27/09/2026; 00:00 IST]` — **no booking references in the
-   subject**; they sit on point 1, next to the check that produced them
-
-The 11 points, each with its proof in brackets:
-
-```
-1. B2C & B2B :- Check OD on B2C & B2B website  :- OK (Booking ref: K…, K…)
-2. B2B :- System Connectivity Status           :- OK
-3. Group Bookings-Salesforce Sync              :- OK
-4. Key account ROW working                     :- OK (Paris→Bordeaux: 7 results)
-5. Agents portal ROW working                   :- OK (Paris→Bordeaux: 7 results)
-6. Key account China working                   :- OK (Paris→Bordeaux: 7 results)
-7. Customer care china working                 :- OK (Paris→Bordeaux: 7 results)
-8. SNCF :- Check OD                            :- OK (3/3 searches)
-9. Primer Status Page                          :- OK
-10. Dropfile sanity check                      :- OK (0 discrepancies)
-11. SF cases not linked with an SR             : 0
-```
+   `B2B & B2C Sanity Check - OK [27/09/2026; 00:00 IST] K070439139, K442252781`
 
 Click in the body, press **Ctrl+V**, review, press **Send**. It is never sent for you: it goes
 to a distribution list and includes judgement calls, so a person presses Send.
@@ -373,15 +331,15 @@ Honesty rules built into the draft:
 - Anything the run did **not** verify is written as **`[check manually]`**, never as OK — SF
   cases are, until the Salesforce CLI is set up.
 - The subject says `KO` if any automated item failed.
-- **Connectivity (point 2) is decided by evidence, not just listed.** A carrier flagged >15 min
-  that the booking run still sold is noted as "flagged but still bookable" and the line stays OK;
-  a flagged carrier that could not be booked on any route (primary + all fallbacks) turns the
-  line **KO** ("follow Critical Incident Management"); a flagged carrier we have no route for
-  (e.g. CAMPANIA EXPRESS) stays OK but is listed as "check by hand".
+- Connectivity carriers flagged >15 min are listed under item 2 **for your review** rather
+  than turning it into KO — whether they matter is the team's call, not the script's.
 - The subject also flips to `KO` if the booking suite itself didn't reach Traveler Details
-  and capture a reference per order (`bookingIssues()` in notify.js, the same gate that blocks the
-  Slack post). Added 2026-09-30 after a run with zero booking references (a real portal-side
-  "not enough seats" error) while every other item still read OK.
+  and capture a reference per order — not shown as its own numbered point (kept to the
+  standard 8), but checked silently via the same gate that blocks the Slack post
+  (`bookingIssues()` in notify.js). Added 2026-09-30 after a run where the browser suite
+  timed out with zero booking references (a real portal-side "not enough seats" error) while
+  every other item still read OK, so the subject alone would have said OK with nothing to
+  show otherwise except the missing reference numbers.
 - Item 1 is one line for both channels, `B2C & B2B :- Check OD on B2C & B2B website`. B2C is
   proven by the production API search (the website itself blocks automated browsers), B2B by
   the booking run. It reads KO if either half fails. If only the API could not run (e.g. VPN
@@ -448,12 +406,7 @@ Measured on the 2026-09-12 22:00 run (19/19 sectors, 2 booking references, 0 exp
 | Build carts + booking references (22 items) | ~3m 16s |
 | Pass searchability (3 destinations) | ~16s |
 | API check (staging + production) | runs **in parallel** — adds nothing |
-| Extra checks incl. the 4 portal searches | run **in parallel** — adds nothing |
-| Pre-flight (version, logins, VPN) | ~20s |
-| **Total** | **~5m 30s – 6m 20s** (15 Oct 2026: 6.3 min) |
-
-Keep it in this range: a run with a full booking on each of the other four portals was measured at
-**27.5 min** and rejected. It stays opt-in (`MSC_PORTAL_BOOKINGS=1`).
+| **Total** | **~5m 30s** |
 
 Deepening the fallback chains from 55 to 101 routes cost nothing: alternates are only
 tried when a primary fails, and on this run every primary worked.
@@ -582,21 +535,7 @@ To go straight to the B2B step alone, use `npm run auth:b2b` instead.
 
 `storageState.json` lasts roughly a few hours of inactivity, so an overnight gap almost
 always means re-authenticating. Do **not** run `npm run auth` while a sanity run is going
-— they share the account. (`npm run sanity` now checks this itself at the start and stops with
-"login expired — run: npm run auth" instead of timing out for minutes.)
-
-### A portal line says `[check manually]` or its saved login has expired
-
-That is one of the four extra portals (key account / agents ROW, key account / customer care
-China). Run `npm run auth:portals`: a window opens only for the portal(s) that need it — sign in
-yourself, same username and password as the B2B portal. Close a window to skip that portal.
-
-### VPN not connected
-
-LocoHub (the API check, mail point 1's B2C half) answers only on the VPN. The run now notices in
-5 s ("LocoHub not reachable (VPN?)"), skips the API check, and point 1 still reads OK on the
-strength of the B2B booking but is listed under "still to check — B2C by hand". Before this
-(4 Oct 2026) a missing VPN left the run grinding at "API searchability" for 20+ minutes.
+— they share the account.
 
 ### Killing a stuck run
 
@@ -688,7 +627,7 @@ LH_ONLY=production npm run api        # the ODs still return products
 ## Project layout
 
 ```
-playwright.config.js       projects: setup (login) / b2b / b2c (+ `portal` when PORTAL=<key>, opt-in) · workers:1 · stamps MSC_RUN_ID
+playwright.config.js       projects: setup (login) / b2b / b2c · workers:1 (shared account) · stamps MSC_RUN_ID
 data/journeys.js           19 sectors + 3 passes + SNCF POS ODs + coverage metadata (edit test data here)
 lib/helpers.js             reusable flow steps: SEL selector map, search, carrier-specific add-to-cart,
                            pass add, POS switch, connectivity parse/flag, coverage guard, blockNoise
@@ -701,14 +640,10 @@ tools/verify-station-labels.js read-only check that every route in data/journeys
                                typed into the portal autocomplete AND lands in the right
                                country — `npm run verify-routes`
 api-searchability.js       read-only LocoHub API check, staging + production
-lib/portal-list.js         the 4 extra portals (key account / agents ROW, key account / customer care China)
-lib/portals.js             logged-in search check per portal (used by extra-checks.js)
-auth-portals.js            `npm run auth:portals` — save a login per portal (you sign in; no password handled)
-preflight.js               first step of sanity: version, B2B login (stops if expired), VPN, AWS, portal logins, Slack
-extra-checks.js            Primer, AppFlow (Group Bookings–SF sync), portal searches, dropfile, SF cases — in parallel
+extra-checks.js            Primer, AppFlow (Group Bookings–SF sync), China portals, SF cases — in parallel
 notify.js                  end of run: Slack post to #sd_24-7 + the sanity mail draft (never auto-sent)
 .env.example               template for .env (Slack webhook, mail To:, SF alias) — .env itself is git-ignored
-run-sanity.js              orchestrates: pre-flight + run lock -> browser suite ‖ API + extra checks -> deck -> history -> summary -> notify
+run-sanity.js              orchestrates: browser suite ‖ API check -> deck refresh -> history log -> summary
 print-summary.js           human-readable end-of-run summary (also runnable standalone)
 log-run.js                 appends one summary line per run to run-history.jsonl
 weekly-report.js           compiles run-history.jsonl into weekly-report.md

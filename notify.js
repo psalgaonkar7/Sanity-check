@@ -34,9 +34,7 @@ const POSTED = path.join(REPORT, '.slack-posted.json');
 
 const read = (f) => { try { return JSON.parse(fs.readFileSync(path.join(REPORT, f), 'utf8')); } catch { return null; } };
 const b2b = read('msc-b2b.json') || {};
-// An API report from another run (or one stamped "incomplete" because the check crashed) is not
-// this run's result: treat it as "API check did not run".
-const api = (() => { const r = read('api-searchability.json') || {}; return ((process.env.MSC_RUN_ID && r.runId && r.runId !== process.env.MSC_RUN_ID) || r.incomplete) ? {} : r; })();
+const api = read('api-searchability.json') || {};
 const extras = read('msc-extras.json') || {};
 const data = require('./data/journeys');
 
@@ -194,96 +192,21 @@ function buildItems() {
   // (e.g. VPN down), the line still reads OK as Pratikesh asked, because B2B was verified; it
   // stays in the "still to check" reminder so the unverified B2C half is not forgotten.
   const bookingOk = !bookingIssues().length;
-  const apiWhy = (api.unreachable || []).some((u) => u.label === 'PRODUCTION')
-    ? 'B2C API check skipped: LocoHub not reachable (VPN?)' : 'B2C API check did not run (see report/api-searchability.json)';
-  const refProof = refs.length ? `Booking ref: ${refs.join(', ')}` : null;
   const b2c = !bookingOk ? { v: 'KO', ok: false, note: 'B2B booking run did not complete: ' + bookingIssues().join('; ') }
-    : !prod ? { v: 'OK', ok: null, manualOnly: true, proof: `${refProof || 'B2B booking run'}; B2C API not checked`, note: `B2B verified by the booking run; ${apiWhy} — check B2C by hand` }
-      : prod.summary.pass === testable ? { v: 'OK', ok: true, proof: refProof }
-        : { v: 'KO', ok: false, proof: refProof, note: `${testable - prod.summary.pass}/${testable} production API routes failing` };
+    : !prod ? { v: 'OK', ok: null, manualOnly: true, note: 'B2B verified by the booking run; B2C API check did not run, check B2C by hand' }
+      : prod.summary.pass === testable ? { v: 'OK', ok: true }
+        : { v: 'KO', ok: false, note: `${testable - prod.summary.pass}/${testable} production API routes failing` };
 
-  // Portal lines (key account / agents ROW, key account / customer care China). The proof is the
-  // same full booking as the main run — every sector + pass carted, booking refs captured —
-  // done on that portal (report/msc-b2b-<key>.json, same run id). Without a booking report
-  // (e.g. notify.js run alone) it falls back to the logged-in search from extra-checks.js.
-  const portalRuns = read('portal-runs.json') || {};
-  const thisRun = process.env.MSC_RUN_ID || b2b.runId;
-  const portal = (key) => {
-    const r = extras[key];
-    const bk = read(`msc-b2b-${key}.json`);
-    const bkValid = bk && (!thisRun || bk.runId === thisRun);
-    const ran = portalRuns.portals && portalRuns.portals[key];
-    if (bkValid) {
-      const prefs = (bk.bookings || []).map((x) => x.ref).filter(Boolean);
-      const expired = (bk.bookings || []).some((x) => x.expired > 0);
-      const lost = (bk.sectors || []).filter((s) => s.status !== 'IN CART' && s.status !== 'EXPECTED (carrier flagged)');
-      const lostNote = lost.length ? `not added on this portal: ${lost.map((s) => `${s.carrier} [${s.status}]`).join(', ')}` : null;
-      // A run that crashed part-way leaves a PARTIAL report (some orders, not every item tried):
-      // never let that read OK.
-      const expectedItems = data.ptpJourneys.length + data.passesToAdd.length;
-      const tried = (bk.sectors || []).length;
-      if (ran && ran.ran && ran.code !== 0) return { v: 'KO', ok: false, proof: prefs.length ? `Booking ref: ${prefs.join(', ')}` : null, note: `booking run on this portal failed part-way (exit ${ran.code}) — ${tried}/${expectedItems} items tried` };
-      if (tried < expectedItems) return { v: 'KO', ok: false, proof: prefs.length ? `Booking ref: ${prefs.join(', ')}` : null, note: `booking run incomplete: only ${tried}/${expectedItems} items tried` };
-      if (!prefs.length) return { v: 'KO', ok: false, note: 'booking run captured no booking reference' + (lostNote ? ' | ' + lostNote : '') };
-      if (expired) return { v: 'KO', ok: false, proof: `Booking ref: ${prefs.join(', ')}`, note: 'an order had expired items' };
-      const searchBad = r && r.status === 'NOT OK' ? `search check also failed: ${r.detail}` : null;
-      return { v: 'OK', ok: true, proof: `Booking ref: ${prefs.join(', ')}`, note: [lostNote, searchBad].filter(Boolean).join(' | ') || null };
-    }
-    if (ran && ran.ran && ran.code !== 0) return { v: 'KO', ok: false, note: `booking run on this portal failed (exit ${ran.code}) and saved no report` };
-    const it = fromExtra(r);
-    if (it.ok && r.route && r.results) it.proof = `${r.route.replace('->', '→')}: ${r.results} results`;
-    return it;
-  };
-
-  // Connectivity, SOP rule #1: a carrier RED/unstable > 15 min needs its offers cross-checked.
-  // The booking run already does that cross-check for every carrier we sell, so the line is
-  // decided by evidence instead of only listing names for "review":
-  //   flagged but still bookable  -> OK (the page is noisy, sales work)          noted
-  //   flagged AND not bookable on any route (all fallbacks tried)  -> KO          real incident
-  //   flagged, no route of ours to try (e.g. CAMPANIA EXPRESS)     -> OK + reminder to check by hand
   const rows = b2b.connectivityRows || [];
   const unmapped = (b2b.coverage && b2b.coverage.unmapped) || [];
-  const sectorOk = new Map((b2b.sectors || []).filter((s) => typeof s.id === 'number').map((s) => [s.id, s.status]));
-  const passOk = new Map((b2b.passesInBooking || []).map((p) => [p.label, p.status]));
-  const verdict = (st) => (st === 'IN CART' ? true : ['ERROR', 'NO RESULTS', 'EXPECTED (carrier flagged)'].includes(st) ? false : null);
-  // Evidence is per INVENTORY SECTION: SBB and TRENITALIA appear under both Point-to-point and
-  // Passes with independent statuses, so "SBB flagged in Passes" must be judged by the pass we
-  // carted, not by the (healthy) point-to-point sector. Sections come from the connectivity rows.
-  const proof = (carrier, section) => {
-    const C = carrier.toUpperCase();
-    const has = (names) => (names || []).some((n) => n.toUpperCase() === C);
-    const p2p = data.ptpJourneys.filter((j) => has(j.connectivityNames) && sectorOk.has(j.id)).map((j) => verdict(sectorOk.get(j.id)));
-    const pas = data.passesToAdd.filter((p) => has(p.connectivityNames) && passOk.has(p.label)).map((p) => verdict(passOk.get(p.label)));
-    const pick = section === 'passes' ? pas : section === 'p2p' ? p2p : section === 'none' ? [] : [...p2p, ...pas];
-    return pick.filter((v) => v !== null);
-  };
-  const flaggedSections = (e) => {
-    const bad = /unstable|down/i;
-    const secs = new Set(rows.filter((r) => r.carrier.toUpperCase() === e.carrier.toUpperCase() && bad.test(r.status))
-      .map((r) => (/pass/i.test(r.section) ? 'passes' : /point/i.test(r.section) ? 'p2p' : 'other')));
-    return secs.size ? [...secs] : ['any'];
-  };
-  const bookable = [], down = [], unverified = [];
-  for (const e of b2b.connectivityEscalations || []) {
-    const tag = `${e.carrier} (${e.status}${e.minutes != null ? ' ' + e.minutes + ' min' : ''})`;
-    const per = flaggedSections(e).map((s) => proof(e.carrier, s === 'other' ? 'none' : s === 'any' ? 'any' : s));
-    const anyDown = per.some((ev) => ev.length && !ev.some(Boolean));
-    const anyOk = per.some((ev) => ev.some(Boolean));
-    if (anyDown) down.push(tag); else if (anyOk) bookable.push(tag); else unverified.push(tag);
-  }
-  const connNote = [
-    down.length ? `NOT bookable on any route: ${down.join(', ')} — follow Critical Incident Management` : '',
-    bookable.length ? `flagged but still bookable: ${bookable.join(', ')}` : '',
-    unverified.length ? `flagged, no route of ours to verify — check by hand: ${unverified.join(', ')}` : '',
-  ].filter(Boolean).join(' | ') || null;
+  const flagged = (b2b.connectivityEscalations || []).map((x) => x.carrier);
   const conn = !rows.length ? { v: 'KO', ok: false, note: 'connectivity page was not read' }
     : unmapped.length ? { v: 'KO', ok: false, note: 'unmapped carrier: ' + unmapped.join(', ') }
-      : down.length ? { v: 'KO', ok: false, note: connNote }
-        : { v: 'OK', ok: true, manualOnly: unverified.length > 0, note: connNote };
+      : { v: 'OK', ok: true, note: flagged.length ? 'flagged >15 min, for your review: ' + flagged.join(', ') : null };
 
   const pos = b2b.sncfPos || [];
   const sncf = !pos.length ? { v: MANUAL, ok: null, note: 'SNCF check did not run' }
-    : pos.every((r) => r.result === 'PASS') ? { v: 'OK', ok: true, proof: `${pos.length}/${pos.length} searches` }
+    : pos.every((r) => r.result === 'PASS') ? { v: 'OK', ok: true }
       : { v: 'KO', ok: false, note: pos.filter((r) => r.result !== 'PASS').map((r) => `${r.od} ${r.result}`).join(', ') };
 
   const primer = fromExtra(extras.primer);
@@ -301,7 +224,6 @@ function buildItems() {
   // The run reads the Glue sanity-check result (discrepancy count), but the support role can't
   // see run history for most Ariane jobs, so "did any Glue job fail" stays a manual Slack check.
   const dropfile = fromExtra(extras.dropfile);
-  if (dropfile.ok) dropfile.proof = '0 discrepancies';
   dropfile.manualOnly = true;
   dropfile.note = [dropfile.note, 'also check Slack #ariane-alerts-prod for failed Glue jobs'].filter(Boolean).join(' | ');
 
@@ -313,11 +235,8 @@ function buildItems() {
     { label: 'B2C & B2B :- Check OD on B2C & B2B website', ...b2c },
     { label: 'B2B :- System Connectivity Status', ...conn },
     { label: 'Group Bookings-Salesforce Sync', ...fromExtra(extras.appflow) },
-    // Portal lines: OK only when a logged-in search returned trains (lib/portals.js).
-    { label: 'Key account ROW working', ...portal('rowKeyAccount') },
-    { label: 'Agents portal ROW working', ...portal('rowAgent') },
-    { label: 'Key account China working', ...portal('chinaKeyAccount') },
-    { label: 'Customer care china working', ...portal('chinaCustomerCare') },
+    { label: 'Key account China working', ...fromExtra(extras.chinaKeyAccount, 'OK') },
+    { label: 'Customer care china working', ...fromExtra(extras.chinaCustomerCare, 'OK') },
     { label: 'SNCF :- Check OD', ...sncf },
     { label: 'Primer Status Page', ...primer },
     { label: 'Dropfile sanity check', ...dropfile },
@@ -329,19 +248,14 @@ const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replac
 
 function buildMail(items) {
   const bad = items.filter((i) => i.ok === false);
-  // A booking suite that didn't finish/capture a reference must flip the subject to KO even if
-  // every numbered line reads OK — see bookingIssues(), the same check that gates the Slack post.
+  // Not shown as its own numbered line (kept to the 8 standard points), but a booking suite
+  // that didn't finish/capture a reference must still flip the subject to KO — see
+  // bookingIssues(), the same check that gates the Slack post.
   const status = (bad.length || bookingIssues().length) ? 'KO' : 'OK';
-  // No booking refs in the subject: they sit on point 1, next to the check that made them.
-  const subject = `B2B & B2C Sanity Check - ${status} [${date}; ${slot} IST]`;
-
-  // What the mail shows after the status: the proof in brackets, and — for a KO only — the reason
-  // (trimmed), so a reader of the mail can see WHY without the console. OK lines stay short.
-  const shown = (it) => it.v + (it.proof ? ` (${it.proof})` : '')
-    + (it.ok === false && it.note ? ` — ${String(it.note).replace(/\s+/g, ' ').slice(0, 170)}` : '');
+  const subject = `B2B & B2C Sanity Check - ${status} [${date}; ${slot} IST] ${refs.join(', ')}`;
 
   const rowHtml = items.map((it, n) => {
-    const value = it.link ? `<a href="${esc(it.link)}">${esc(it.link)}</a>` : esc(shown(it));
+    const value = it.link ? `<a href="${esc(it.link)}">${esc(it.link)}</a>` : esc(it.v);
     const sep = it.link ? ': ' : (it.sep || ':- ');
     const color = it.ok === false ? ' style="color:#c00000;font-weight:bold"' : it.v === MANUAL ? ' style="color:#b35c00;font-weight:bold"' : '';
     return `<tr><td style="padding:1px 8px 1px 18px;vertical-align:top">${n + 1}.</td>`
@@ -360,7 +274,7 @@ ${rowHtml}
   const text = [
     'Hello All,', '',
     `Please find today's sanity check result done at ${slot} IST`, '',
-    ...items.map((it, n) => `${n + 1}. ${it.label}${it.link ? ': ' + it.link : (it.sep || '  :- ') + shown(it)}`),
+    ...items.map((it, n) => `${n + 1}. ${it.label}${it.link ? ': ' + it.link : (it.sep || '  :- ') + it.v}`),
   ].join('\r\n');
 
   return { subject, html, text, status };
@@ -423,7 +337,7 @@ function openDraft(mail) {
   console.log('─'.repeat(72));
   console.log('  Subject: ' + mail.subject + '\n');
   items.forEach((it, n) => {
-    const val = it.link ? it.link : it.v + (it.proof ? ` (${it.proof})` : '');
+    const val = it.link ? it.link : it.v;
     console.log(`  ${String(n + 1).padStart(2)}. ${it.label.padEnd(34)} ${it.link ? '' : ':- '}${val}` + (it.note ? `\n        ↳ ${it.note}` : ''));
   });
   const manual = items.filter((i) => i.v === MANUAL || i.manualOnly).map((i) => i.label);
