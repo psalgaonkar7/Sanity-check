@@ -2,7 +2,8 @@
 
 Deterministic, repeatable **Manual Sanity Check** for Rail Europe **B2B**.
 Replaces "an AI clicking the live browser" (~28 min, non-deterministic) with a real
-test suite that covers **every carrier on the connectivity page** in **~5.5 minutes**,
+test suite that covers **every carrier on the connectivity page** in **about 7 minutes**
+(longer on days a carrier's search times out — see "Runtime"),
 with zero human-error variance and auto-generated evidence — booking references, a
 Markdown/JSON report, an auto-updating manager slide deck, and a weekly summary.
 
@@ -17,6 +18,11 @@ Markdown/JSON report, an auto-updating manager slide deck, and a weekly summary.
 > on a third-party system, so a daily automation must not trigger it. `Created` status
 > (cart-side only, nothing sent to any carrier) is sufficient proof of a working MSC.
 > The API layer is **read-only search**; nothing is ever booked.
+>
+> **The one exception is opt-in and off by default:** `MSC_PAYMENT_PROBE=1` takes ONE
+> item through generic traveler details to the Hold & Payment page and stops (never pays,
+> never clicks that page's button). It holds one real seat at the carrier — see
+> "Payment-page probe" below.
 
 ---
 
@@ -193,24 +199,46 @@ npm run weekly   # compile run-history.jsonl into weekly-report.md
 npm run report   # open the Playwright HTML report
 npm run auth     # AWS SSO (era) then the B2B login capture — re-do when a session expires
 npm run auth:b2b # just the B2B login capture, skips AWS SSO
+npm run auth:portals    # the 4 other portals' saved logins — a window opens only for the expired ones
+npm run china-full      # OPT-IN: full 22-item booking on customer care China (~9 min, on its own)
 npm run verify-routes   # check every route in data/journeys.js is typeable in the portal
 node check-login.js     # ~10s: is the saved session still valid? run this BEFORE a long run
+node notify.js --dry-run   # show the mail and the DM text for the last run; sends nothing
 ```
 
-Handy env vars: `MSC_MAX_SECTORS=4` (validate the flow on a subset first),
-`MSC_DAYS_AHEAD`, `MSC_MAX_ITEMS_PER_ORDER`, `HEADED=1` (watch it run),
-`LH_ONLY=production`.
+Handy env vars (set them in the same window before the command):
+
+| Variable | Effect |
+|---|---|
+| `MSC_MAX_SECTORS=4` | test on the first 4 sectors only (a partial run is never offered as "Sanity done") |
+| `MSC_DAYS_AHEAD`, `MSC_MAX_ITEMS_PER_ORDER` | travel date offset (default 45 days) / items per order (default 15) |
+| `HEADED=1` | watch the browser |
+| `LH_ONLY=production` (or `staging`) | API check on one environment only |
+| `MSC_NO_DM=1` (or `MSC_NO_SLACK=1`) | do not send the result DM |
+| `MSC_NO_MAIL=1` | do not open the Outlook draft (it is still saved in `report/`) |
+| `MSC_SLOT=HH:MM` | force the slot time shown in the DM and the mail |
+| `MSC_PAYMENT_PROBE=1` | opt-in: one item to the Hold & Payment page (see "Payment-page probe") |
+| `PORTAL=<key>` | used by `npm run china-full` / the opt-in `portal` project to pick the portal |
+| `POSTMAN_DIR`, `AWS_CLI`, `SF_ORG_ALIAS`, `MAIL_TO`, `SANITY_TRACKER_URL`, `SLACK_ALERT_WEBHOOK` | settings; also read from `.env` (copy `.env.example`) |
+| `AWS_PROFILE_SANITY`, `AWS_PROFILE_ARIANE` | override the AWS profiles (defaults `era-prod`, `ariane-prod`) |
+| `DAYS` | `npm run weekly` only: how many days back (default 7) |
 
 **Fully standalone (no AI assistant needed):** `npm run sanity` prints a human-readable
 summary at the end — booking references, per-check table, sector list grouped by outcome,
 connectivity flags with affected routes, coverage gaps, and API detail. Two
 double-clickable PowerShell scripts wrap the common commands so you never have to
-remember the Node PATH setup:
+remember the Node PATH setup. They find Node on whoever's machine they run on: the `node`
+already on PATH, else a portable Node in your own profile
+(`%LOCALAPPDATA%\nodejs-portable\node-v…-win-x64`, also `%USERPROFILE%\nodejs-portable`):
 
 ```powershell
-.\run-sanity.ps1   # full sanity check, prints the summary, pauses at the end
-.\run-auth.ps1     # login refresh
+.\run-sanity.ps1              # full sanity check, prints the summary, pauses at the end
+.\run-auth.ps1                # login refresh
+.\run-sanity.ps1 -CheckOnly   # only show which Node it would use; runs nothing
 ```
+
+If PowerShell refuses to run them: `powershell -ExecutionPolicy Bypass -File .\run-sanity.ps1`.
+Keep both files ASCII-only (Windows PowerShell 5.1 reads them as ANSI).
 
 Reports land in `report/` (gitignored — regenerated every run):
 - `msc-b2b.json` — connectivity rows, coverage, SNCF POS results, booking references, per-item status
@@ -236,8 +264,8 @@ extra time: the extra checks run in parallel with the browser suite.
 |---|---|---|
 | Primer Status Page | `status.primer.io` public Statuspage API | overall "none", every component operational, no open incident. Maintenance in progress or in the next 24 h is shown as a note |
 | Group Bookings–Salesforce Sync | AWS CLI (`era-prod` SSO profile) → AppFlow `tf-era-prod-shared-salesforce-flow` | flow Active and **no failed execution since the previous sanity** |
-| Key account China | browser loads `www.era.raileurope.cn` | the sign-in page actually renders |
-| Customer care China | browser loads `www.customercare.raileurope.cn` | the sign-in page actually renders |
+| Key account ROW · Agents portal ROW · Key account China | each portal opened with its own saved login (`auth/<key>.json`, `npm run auth:portals`); a real train search (Paris→Bordeaux, then London→Paris, then Vienna→Munich; each route retried once) — `lib/portals.js` | logged in **and** a search returned trains. Expired/missing login = `[check manually]`; logged in but every search fails = KO |
+| Customer care China | the same logged-in search, then ONE train carted to a booking reference on Traveler Details (status Created, ref starts with **Z**). The cart is emptied before and again right after, so nothing is left to expire there — an EXPIRED item in the .cn cart cannot be removed through the site and blocks Traveler Details for the next run | search returned trains **and** the booking reference was captured; search OK but booking failed = KO (the reason says if an expired leftover was the cause) |
 | Dropfile sanity check | AWS CLI (`ariane-prod` SSO profile, same `era` login) → latest `[Check] Discrepancies: N` line from Glue job `tf-ariane-prod-transactions-sanity-check` in `/aws-glue/jobs/output` (job runs daily ~14:00 IST; last 30 h are read) | 0 discrepancies. Failed Glue jobs are **not** covered (the support role can't read most Ariane job histories), so the run reminds you to check Slack `#ariane-alerts-prod`. Procedure: Confluence SR page 2223472642 |
 | SF cases not linked with an SR | Salesforce CLI → the *Technical HD view* list view | the count of cases in that view |
 
@@ -247,8 +275,9 @@ Three things that are easy to get wrong, and why the checks are built the way th
   `Case_And_Itinerary__e` — not scheduled. A long gap between runs just means no group-booking
   events arrived, so "last run was hours ago" is not a failure. Only a *failed* execution is.
 - **Both China portals answer HTTP 200 with a bare "Loading" shell** whether or not the app
-  works, so the check waits for the sign-in form to render. It proves the portal is up; it does
-  not log in, and the mail says so.
+  works, so a page load proves nothing. That is why every portal line now needs a logged-in
+  search that returns trains (the old sign-in-page check read OK during the 12–14 Oct 2026
+  China search outage).
 - **The China check must not use `blockNoise()`.** It speeds up the `.com` portal, but the
   key-account `.cn` portal never finishes booting without the analytics hosts it blocks —
   stuck on "Loading" with it, sign-in form in ~5 s without it. Using it would report that
@@ -329,21 +358,24 @@ The run builds the full mail from its own results, then:
 
 1. copies it to the clipboard **formatted**, with the numbered list and links
 2. opens a new **Outlook compose window** with the subject filled in, e.g.
-   `B2B & B2C Sanity Check - OK [27/09/2026; 00:00 IST] K070439139, K442252781`
+   `B2B & B2C Sanity Check - OK [20/10/2026; 09:00 IST]` (no booking refs in the subject — they
+   sit on point 1 and point 7)
 
 Click in the body, press **Ctrl+V**, review, press **Send**. It is never sent for you: it goes
 to a distribution list and includes judgement calls, so a person presses Send.
 
 Honesty rules built into the draft:
 
-- Anything the run did **not** verify is written as **`[check manually]`**, never as OK — SF
-  cases are, until the Salesforce CLI is set up.
+- Anything the run did **not** verify is written as **`[check manually]`**, never as OK. The
+  one deliberate exception is point 11 (SF cases): it shows a plain `0` placeholder until the
+  Salesforce CLI is approved, and is always listed under "still to check" so it is counted by
+  hand.
 - The subject says `KO` if any automated item failed.
 - Connectivity carriers flagged >15 min are listed under item 2 **for your review** rather
   than turning it into KO — whether they matter is the team's call, not the script's.
 - The subject also flips to `KO` if the booking suite itself didn't reach Traveler Details
   and capture a reference per order — not shown as its own numbered point (kept to the
-  standard 8), but checked silently via the same gate that withholds the "Sanity done" line in the DM
+  standard 11), but checked silently via the same gate that withholds the "Sanity done" line in the DM
   (`bookingIssues()` in notify.js). Added 2026-09-30 after a run where the browser suite
   timed out with zero booking references (a real portal-side "not enough seats" error) while
   every other item still read OK, so the subject alone would have said OK with nothing to
@@ -374,9 +406,9 @@ sf org login web --alias re-prod
 with `OAUTH_APPROVAL_ERROR_GENERIC`. OAuth itself works in the org (admin-installed apps such as
 *Atlassian Links* log in fine), so the refusal is specific to the Salesforce CLI app — a
 Salesforce admin has to approve it for the user's profile. Retrying the login will not help.
-Until then item 9 stays `[check manually]`; nothing else is affected.
+Until then item 11 shows the `0` placeholder (counted by hand); nothing else is affected.
 
-Once approved, item 9 fills itself in. It reads the *Technical HD view* list view directly, so it
+Once approved, item 11 fills itself in. It reads the *Technical HD view* list view directly, so it
 always matches what you see in Salesforce. **Deciding whether a case needs an SR stays with
 you** — the run counts and lists the cases, it does not judge them. If the login lapses the
 item goes back to `[check manually]` with the command to re-run.
@@ -405,7 +437,14 @@ item goes back to `[check manually]` with the command to re-run.
 
 ## Runtime (measured)
 
-Measured on the 2026-09-12 22:00 run (19/19 sectors, 2 booking references, 0 expired):
+**Now (2026-10-20): about 7 minutes normally, longer on slow-carrier days.** Runs that day took
+7.3 to 13.6 min. The slow ones were RegioJet's two sectors failing on every route (each tries up
+to 5 routes and waits up to 35 s on each) plus RENFE timing out. The portal searches and the
+one-train China booking run in parallel with the main booking and add no time; the full China
+booking (`npm run china-full`, about 9 min) is opt-in for that reason.
+
+The step breakdown below is older (2026-09-12 22:00 run, 19/19 sectors, 2 booking references,
+0 expired), before the portal checks existed:
 
 | Step | Time |
 |---|---|
@@ -639,10 +678,17 @@ LH_ONLY=production npm run api        # the ODs still return products
 ## Project layout
 
 ```
-playwright.config.js       projects: setup (login) / b2b / b2c · workers:1 (shared account) · stamps MSC_RUN_ID
-data/journeys.js           19 sectors + 3 passes + SNCF POS ODs + coverage metadata (edit test data here)
-lib/helpers.js             reusable flow steps: SEL selector map, search, carrier-specific add-to-cart,
-                           pass add, POS switch, connectivity parse/flag, coverage guard, blockNoise
+playwright.config.js       projects: setup (login) / b2b / b2c / portal (opt-in, PORTAL=<key>) · workers:1
+data/journeys.js           19 sectors + 3 passes + SNCF POS ODs + portal search routes + coverage metadata
+lib/helpers.js             reusable flow steps: SEL selector map, login state, search, carrier-specific
+                           add-to-cart, pass add, POS switch, connectivity parse/flag, coverage guard,
+                           blockNoise, and the opt-in payment-page probe (reachPaymentPage)
+lib/portal-list.js         the 4 other portals (key account / agents ROW, key account / customer care China)
+lib/portals.js             logged-in search on each portal; one-train booking on customer care China
+lib/env.js                 .env loader shared by run-sanity / notify / extra-checks / api-searchability
+auth.js                    `npm run auth`: AWS SSO, then the B2B login (tests/auth.setup.js)
+auth-portals.js            `npm run auth:portals`: saves the 4 portal logins into auth/ (only expired ones)
+china-full.js              `npm run china-full`: opt-in full 22-item booking on customer care China
 tests/auth.setup.js        one-time manual login -> storageState.json
 tests/b2b-msc.spec.js      connectivity + coverage guard + SNCF POS + batched carts/booking references
 tests/b2b-passes.spec.js   rail pass searchability (Interrail + Swiss + BritRail)
@@ -652,7 +698,7 @@ tools/verify-station-labels.js read-only check that every route in data/journeys
                                typed into the portal autocomplete AND lands in the right
                                country — `npm run verify-routes`
 api-searchability.js       read-only LocoHub API check, staging + production
-extra-checks.js            Primer, AppFlow (Group Bookings–SF sync), China portals, SF cases — in parallel
+extra-checks.js            Primer, AppFlow (Group Bookings–SF sync), 4 portal checks, dropfile, SF cases — in parallel
 notify.js                  end of run: the sanity mail draft (never auto-sent) + result DM to you via Pratikesh Assistant
 .env.example               template for .env (mail To:, SF alias, optional DM webhook) — .env itself is git-ignored
 run-sanity.js              orchestrates: browser suite ‖ API check -> deck refresh -> history log -> summary
@@ -661,7 +707,11 @@ log-run.js                 appends one summary line per run to run-history.jsonl
 weekly-report.js           compiles run-history.jsonl into weekly-report.md
 deck/gen.js                builds/refreshes Rail-Europe-MSC-Automation-Overview.pptx
 check-login.js             quick standalone check of whether the saved login is still valid
+run-sanity.ps1, run-auth.ps1   double-click wrappers; find Node themselves (-CheckOnly to test)
+CMD-cheatsheet.txt         plain-text command reference for daily use
+CLAUDE.md                  rules for an AI assistant working in this repo (not needed to run it)
 report/                    JSON + HTML output (gitignored, regenerated every run)
+auth/, storageState.json   live login sessions (gitignored — never share or commit)
 ```
 
 ## Fallback routes

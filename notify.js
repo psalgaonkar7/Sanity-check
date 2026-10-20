@@ -25,17 +25,8 @@ const REPORT = path.join(__dirname, 'report');
 const SENT = path.join(REPORT, '.dm-sent.json');
 const WIKI = 'https://raileurope.atlassian.net/wiki/pages/viewpage.action?pageId=2411692034';
 
-// --- tiny .env loader (no dependency): KEY=value lines, # comments, optional quotes ---------
-(function loadEnv() {
-  const f = path.join(__dirname, '.env');
-  if (!fs.existsSync(f)) return;
-  for (const raw of fs.readFileSync(f, 'utf8').split(/\r?\n/)) {
-    const m = raw.match(/^\s*([A-Z0-9_]+)\s*=\s*(.*?)\s*$/i);
-    if (!m || raw.trim().startsWith('#')) continue;
-    const v = m[2].replace(/^(['"])(.*)\1$/, '$2');
-    if (process.env[m[1]] == null) process.env[m[1]] = v;
-  }
-})();
+// --- .env (KEY=value lines) — shared loader, see lib/env.js ---------------------------------
+require('./lib/env').loadEnv();
 
 const read = (f) => { try { return JSON.parse(fs.readFileSync(path.join(REPORT, f), 'utf8')); } catch { return null; } };
 const b2b = read('msc-b2b.json') || {};
@@ -285,7 +276,7 @@ const shown = (it) => it.v + (it.proof ? ` (${it.proof})` : '');
 
 function buildMail(items) {
   const bad = items.filter((i) => i.ok === false);
-  // Not shown as its own numbered line (kept to the 8 standard points), but a booking suite
+  // Not shown as its own numbered line (kept to the 11 standard points), but a booking suite
   // that didn't finish/capture a reference must still flip the subject to KO — see
   // bookingIssues(), the same check that withholds the "Sanity done" line in the DM.
   const status = (bad.length || bookingIssues().length) ? 'KO' : 'OK';

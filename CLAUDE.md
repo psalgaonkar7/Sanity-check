@@ -1,7 +1,8 @@
 # RE/ASC — Rail Europe Automated Sanity Check automation
 
 Deterministic Playwright replacement for driving the MSC by hand (~28 min, non-deterministic)
-— covers every carrier on the connectivity page in ~5.5 minutes and produces booking references
+— covers every carrier on the connectivity page in about 7 minutes (longer when a carrier's
+search times out) and produces booking references
 as evidence. Git remote: `github.com/psalgaonkar7/Sanity-check.git` (renamed from `MSC.git`,
 itself renamed from `Local.git`; GitHub still redirects both old names). **Local folder
 renamed `RE/MSC` → `RE/ASC` on 2026-10-01**, matching the GitHub repo rename the same day.
@@ -34,8 +35,11 @@ export PATH="C:/Users/PSalgaonkar/AppData/Local/nodejs-portable/node-v24.18.0-wi
 **If every check times out, the login has expired** — it does not look like a login error.
 Run `node check-login.js` (10s) before blaming the code; see Troubleshooting in `README.md`.
 
-Other entry points: `npm run auth`, `npm run deck` (regenerates the manager deck into
-`RE/docs/Rail-Europe-MSC-Automation-Overview.pptx`).
+Other entry points: `npm run auth` (AWS SSO + B2B), `npm run auth:portals` (the 4 other
+portals' saved logins), `npm run china-full` (opt-in full China booking), `node notify.js
+--dry-run` (mail + DM text, sends nothing), `npm run deck` (regenerates the manager deck into
+`RE/docs/Rail-Europe-MSC-Automation-Overview.pptx`). `run-sanity.ps1` / `run-auth.ps1` find
+Node on any machine (`-CheckOnly` to test) and must stay ASCII-only.
 
 ## ⚠ Rules that have already cost us
 
@@ -55,6 +59,10 @@ Other entry points: `npm run auth`, `npm run deck` (regenerates the manager deck
 - **Full China booking is opt-in** (`npm run china-full`, ~9 min, Z… refs). `npm run sanity`
   books only ONE China train (~45 s). Do not add the full China booking to the default run:
   the run has to stay about 7-10 min.
+- **No team-channel posts.** The result goes only to Pratikesh as a Slack DM through the
+  Pratikesh Assistant webhook (`SLACK_ALERT_WEBHOOK`, `notify.js`). The #sd_24-7 "Sanity Bot"
+  post is retired; never bring back `SLACK_WEBHOOK_URL` or `check-slack`. The paste-ready
+  "Sanity done" line is only offered for a complete run (`bookingIssues()` empty).
 
 ## Layout
 
@@ -64,8 +72,12 @@ Other entry points: `npm run auth`, `npm run deck` (regenerates the manager deck
 - `tests/` — the Playwright specs. `report/`, `test-results/` — generated output.
 - `deck/gen.js` — builds the manager deck. Output path is self-locating via `__dirname`; do
   not hardcode it again.
-- `api-searchability.js` — read-only API check. Reads `POSTMAN_DIR` env var, falling back to
-  the Postman export folder under `Desktop\Notes\Training`.
+- `api-searchability.js` — read-only API check (staging + production). Reads `POSTMAN_DIR`,
+  falling back to the current user's `OneDrive - RAILEUROPE\Desktop\Training Material\Postman
+  Collections\LH` (then the older `Notes\Training\Postman json files\LH`).
+- `notify.js` — the mail draft + the result DM. `extra-checks.js` — Primer, AppFlow, dropfile,
+  SF count and the 4 portal checks (`lib/portals.js`, `lib/portal-list.js`). `lib/env.js` —
+  the shared `.env` loader. `china-full.js` — the opt-in full China booking.
 
 ## Memory
 

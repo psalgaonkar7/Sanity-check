@@ -21,7 +21,7 @@
 // SEARCH ONLY — nothing is added to a cart, booked, or written to the portal.
 //
 // Run:  node tools/discover-carriers.js
-//       MSC_ONLY_NEW=1 node tools/discover-carriers.js   (skip the 12 already-covered ODs)
+//       MSC_ONLY_NEW=1 node tools/discover-carriers.js   (skip the already-covered ODs)
 // ============================================================================
 const fs = require('fs');
 const path = require('path');
@@ -32,7 +32,7 @@ const ROOT = path.join(__dirname, '..');
 const DAYS_AHEAD = Number(process.env.MSC_DAYS_AHEAD || 45);
 
 // Candidate ODs typed into the autocomplete. `expect` is a hypothesis to confirm or refute,
-// never an assumption. `existing` marks the 12 routes already in data/journeys.js — they are
+// never an assumption. `existing` marks the routes already in data/journeys.js — they are
 // probed too, because bundled routes need their FULL carrier list (Barcelona->Madrid is
 // RENFE *and* IRYO *and* OUIGO, but the suite currently only ever adds the first fare).
 const CANDIDATES = [

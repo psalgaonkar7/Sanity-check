@@ -35,6 +35,11 @@ if (b2b.booking) {
     refs.forEach((r) => console.log(`   ${r.ref}   STATUS: ${status} [PASS]${r.items != null ? `   (${r.items} items)` : ''}`));
   }
   console.log(` ${trains} sectors in cart${passNote}  ·  expired: ${b2b.bookingExpiredSectors ?? 0}  ·  stopped at Traveler Details (never proceeds to Hold & Payment, never submitted to the carrier)`);
+  // The opt-in payment-page probe (MSC_PAYMENT_PROBE=1) is the one item that does go further.
+  const pp = b2b.paymentProbe;
+  if (pp) {
+    console.log(` Payment-page probe (1 item, opt-in): ${pp.reachedPayment ? `reached Hold & Payment, ref ${pp.ref || '?'} status ${pp.status || '?'} — never paid, holds one real seat at the carrier` : `NOT reached: ${pp.error || 'payment page button never appeared'}`}`);
+  }
 } else {
   console.log('\n BOOKING REFERENCE: none captured this run (browser suite likely failed — check login with `npm run auth`)');
 }

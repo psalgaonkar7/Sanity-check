@@ -138,7 +138,7 @@ function stat(slide, x, y, w, big, small, color) {
   s.addText("Direct to the search engine (LocoHub)", { x: 7.75, y: 2.55, w: 4.9, h: 0.35, fontFace: SANS, fontSize: 12.5, italic: true, color: MUTED, margin: 0 });
   s.addText([
     { text: "Fast and bot-proof — no website wall", options: { bullet: true, breakLine: true } },
-    { text: "All 12 routes on Staging and Production", options: { bullet: true, breakLine: true } },
+    { text: "Every sanity route on Staging and Production", options: { bullet: true, breakLine: true } },
     { text: "Production engine is shared with B2C", options: { bullet: true, breakLine: true } },
     { text: "Confirms results + sample fares per route", options: { bullet: true, breakLine: true } },
     { text: "Read-only — never books", options: { bullet: true } },

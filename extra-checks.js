@@ -16,6 +16,7 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const { spawnSync } = require('child_process');
+require('./lib/env').loadEnv();   // AWS_CLI, SF_ORG_ALIAS, AWS_PROFILE_* ... from .env, as the docs say
 
 const REPORT = path.join(__dirname, 'report');
 const OUT = path.join(REPORT, 'msc-extras.json');

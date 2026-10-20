@@ -1,11 +1,14 @@
 // Playwright configuration for the Rail Europe MSC automation.
-// Three "projects":
-//   setup -> one-time (headed) manual login that saves the B2B session to storageState.json
-//   b2b   -> the B2B sanity check (connectivity, SNCF POS search test, build cart, capture booking ref). Reuses the saved session.
-//   b2c   -> the B2C searchability checks (no login needed).
+// Four "projects":
+//   setup  -> one-time (headed) manual login that saves the B2B session to storageState.json
+//   b2b    -> the B2B sanity check (connectivity, SNCF POS search test, build cart, capture booking ref). Reuses the saved session.
+//   b2c    -> the B2C searchability checks (no login needed).
+//   portal -> OPT-IN, only when PORTAL=<key> is set (e.g. `npm run china-full`): the full booking
+//             on another portal with its own saved login (auth/<key>.json).
 //
 // IMPORTANT: This suite NEVER pays, never confirms a booking. The B2B flow stops at the
-// "Traveler details" page (where the booking reference is created) by design.
+// "Traveler details" page (where the booking reference is created) by design. The one opt-in
+// exception, off by default, is MSC_PAYMENT_PROBE=1 (one item to Hold & Payment, never paid).
 
 const { defineConfig } = require('@playwright/test');
 

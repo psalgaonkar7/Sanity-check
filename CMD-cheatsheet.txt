@@ -15,7 +15,7 @@ Folder: C:\Claude\RE\ASC     Repo: github.com/psalgaonkar7/Sanity-check
       and Dropfile sanity check items read [check manually].
     - One AWS login (sso-session "era") covers both AWS profiles the sanity run uses:
       era-prod (AppFlow) and ariane-prod (dropfile).
- b) Run the sanity check (about 5.5 min):
+ b) Run the sanity check (about 7 min; up to ~14 min on days a carrier's search times out):
       cd C:\Claude\RE\ASC
       npm run sanity
     - Needs the VPN / corporate network connected (API step reaches LocoHub).
@@ -30,25 +30,33 @@ Folder: C:\Claude\RE\ASC     Repo: github.com/psalgaonkar7/Sanity-check
       China ref, e.g.  "Customer care china working :- OK (Booking ref: K123456789)".
       If one says [check manually] its saved login expired: run  npm run auth:portals
     - Paste the email body (Ctrl+V), review, press Send yourself.
-    - The mail has 9 points, each OK or KO:
-        1 B2C & B2B check   2 B2B connectivity   3 Group Bookings-Salesforce Sync
-        4 Key account China 5 Customer care China 6 SNCF   7 Primer
-        8 Dropfile sanity check   9 SF cases (shows 0 until Salesforce is approved)
+    - The mail has 11 points, each OK, KO or [check manually]:
+        1 B2C & B2B check (customer care ROW booking refs)   2 B2B connectivity
+        3 Group Bookings-Salesforce Sync   4 Key account ROW   5 Agents portal ROW
+        6 Key account China   7 Customer care China (China booking ref, Z...)   8 SNCF
+        9 Primer   10 Dropfile sanity check   11 SF cases (shows 0 until Salesforce is approved)
  c) By hand each run (the tool cannot do these):
       - Slack #ariane-alerts-prod: any failed Glue job? If yes raise a Jira SR for the
         third-party team. (Procedure: Confluence SR page 2223472642; recording in
         #team-application-support)
-      - SF case count (point 9)
+      - SF case count (point 11)
+      - Any carrier listed as DROPPED in the run's summary (e.g. RegioJet): the mail line
+        does not turn KO for that on its own, so look at it yourself
 
 2. IF "node" IS NOT RECOGNISED IN CMD
       set "PATH=C:\Users\PSalgaonkar\AppData\Local\nodejs-portable\node-v24.18.0-win-x64;%PATH%"
-    ("export ..." is Git Bash only; it does not work in CMD)
+    (on another person's machine use their own Node folder; "export ..." is Git Bash only)
+    Or double-click run-sanity.ps1 / run-auth.ps1: they find Node by themselves.
+    Test which Node they would use:  powershell -ExecutionPolicy Bypass -File .\run-sanity.ps1 -CheckOnly
 
 3. LOGIN PROBLEMS
  - Every check times out / looks broken everywhere = B2B session expired:
       node check-login.js            (about 10 sec, run this before blaming the code)
  - Re-login B2B only (skip AWS):
       npm run auth:b2b
+ - A portal line (points 4-7) says [check manually] = that portal's saved login expired.
+   Save it again (a window opens only for the expired ones; you sign in yourself):
+      npm run auth:portals
  - AWS SSO only:
       aws sso login --sso-session era
 
@@ -61,18 +69,18 @@ Folder: C:\Claude\RE\ASC     Repo: github.com/psalgaonkar7/Sanity-check
       set MSC_PAYMENT_PROBE=1   opt-in: also take ONE item to the Hold & Payment page (never
                            pays, but holds a real seat at the carrier) - leave off normally
       npm run api          LocoHub API check, staging + production (read only)
-      node extra-checks.js Primer, AppFlow, China x2, Dropfile, SF cases (read only)
+      node extra-checks.js Primer, AppFlow, 4 portal searches + 1 China booking, Dropfile, SF cases
       npm run deck         rebuild the manager deck (.pptx)
       npm run weekly       weekly summary of the last 7 days (weekly-report.md)
       npm run report       open the last Playwright HTML report
       npm run verify-routes  check route labels in data\journeys.js (run after any edit)
 
 5. SAFE TESTING OF EMAIL / DM
-      node notify.js --dry-run     show what WOULD be posted/mailed
+      node notify.js --dry-run     show the DM text and the mail; sends nothing
     Env vars (set in the same CMD window, then run; they last until the window closes):
       set MSC_NO_DM=1        skip the result DM
       set MSC_NO_MAIL=1      skip opening the mail draft
-      set MSC_SLOT=14:00     force the slot time in the post
+      set MSC_SLOT=14:00     force the slot time in the DM / mail
       set MSC_MAX_SECTORS=4  test with only 4 sectors (partial runs are never announced)
       set HEADED=1           watch the browser
       set LH_ONLY=production API check on production only
@@ -119,7 +127,8 @@ Folder: C:\Claude\RE\ASC     Repo: github.com/psalgaonkar7/Sanity-check
    not run (then it is listed under "still to check" in the console).
  - Point 1 showing [check manually] / API not run: look at report\api-searchability.json. If it
    says "envs": [] the Postman folder was not found. Expected folder:
-   C:\Users\PSalgaonkar\OneDrive - RAILEUROPE\Desktop\Training Material\Postman Collections\LH
+   %USERPROFILE%\OneDrive - RAILEUROPE\Desktop\Training Material\Postman Collections\LH
+   (your own user folder; or point POSTMAN_DIR at wherever your exports are)
    (or set POSTMAN_DIR).
 
 9. FILES WORTH KNOWING (in C:\Claude\RE\ASC)

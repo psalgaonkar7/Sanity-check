@@ -7,7 +7,8 @@ description: Run the Rail Europe B2B Manual Sanity Check (MSC) via this repo's P
 
 Deterministic Playwright replacement for the old "AI drives a live browser" approach
 (~28 min, token-heavy, non-deterministic). This repo covers **every carrier on the
-connectivity page** in **~6 minutes** and produces booking references as evidence.
+connectivity page** in **about 7 minutes** (longer when a carrier's search times out) and
+produces booking references as evidence.
 
 Repo: https://github.com/psalgaonkar7/Sanity-check.git — renamed from `MSC.git`, itself
 renamed from `Local.git`; GitHub still redirects both old names (primary copy: `RE\ASC` in
@@ -59,7 +60,7 @@ with `'export' is not recognized`. If `node -v` ever fails, the CMD form is
 `set "PATH=C:\Users\PSalgaonkar\AppData\Local\nodejs-portable\node-v24.18.0-win-x64;%PATH%"`
 and the PowerShell form uses `$env:PATH`.
 
-Takes ~6 min. Running it in the background is fine — it's a real Playwright process,
+Takes about 7 min (7.3–13.6 min on 2026-10-20, the slow runs were RegioJet timeouts). Running it in the background is fine — it's a real Playwright process,
 not something driven through the browser-pane MCP tools, so don't use `Claude_Browser`
 tools for this: they're unnecessary and burn tokens. Only reach for a manual browser
 flow if this automation is unavailable.
@@ -95,8 +96,9 @@ them `npm run auth:b2b` instead, which skips the AWS step entirely.
    B2C itself is anti-bot blocked.
 3. **Manager deck** (`deck/gen.js`) and **run history** (`log-run.js` → `npm run weekly`).
 4. **Extra checks** (`extra-checks.js`, in parallel): Primer status API, AppFlow
-   `tf-era-prod-shared-salesforce-flow` (Group Bookings–SF sync), both China portals, and the
-   SF *Technical HD view* case count. Each degrades to SKIPPED with a fix when a login lapses.
+   `tf-era-prod-shared-salesforce-flow` (Group Bookings–SF sync), the Ariane dropfile Glue
+   result, a logged-in search on the 4 other portals (plus the one-train China booking), and
+   the SF *Technical HD view* case count. Each degrades to SKIPPED with a fix when a login lapses.
 5. **Mail + result DM** (`notify.js`, last step): opens the sanity mail as an Outlook draft, then
    DMs Pratikesh the result through the **Pratikesh Assistant** workflow webhook
    (`SLACK_ALERT_WEBHOOK`, same payload as `RE/Assistant`). **Nothing goes to a team channel**:
@@ -189,6 +191,7 @@ Read `report/msc-b2b.json`, `report/msc-api-searchability.md`, and the console s
   review (cross-check on Trainline, escalate per Critical Incident Management if
   confirmed); **never auto-escalate yourself**
 
-Do **not** draft or send the daily team email — only report findings back to the user.
+Do **not** send the daily team email or write a separate one — `notify.js` already opens the
+draft for a person to review and send; just report findings back to the user.
 Do not treat a `storageState.json` expiry as a site outage. Don't present an unverified
 guess as a finding: if something dead-ends, say so.

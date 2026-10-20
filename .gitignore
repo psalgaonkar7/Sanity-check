@@ -45,3 +45,6 @@ weekly-report.md
 /summarize_*.js
 /trace_*.js
 /xlsx_extract/
+# Personal, machine-specific files - never commit (versions.txt is a local inventory).
+/versions.txt
+/twg-install.ps1

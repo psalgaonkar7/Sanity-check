@@ -3,6 +3,7 @@
 // never hide the (bot-proof) search signal. Then it auto-refreshes the manager deck from
 // the fresh report data. Exits non-zero if the browser or API part failed.
 const { spawnSync, spawn } = require('child_process');
+require('./lib/env').loadEnv();   // .env settings reach every child process (extra checks, API, notify)
 
 // One id for the whole run, inherited by every Playwright worker. The b2b spec merges its
 // report with the on-disk copy only when the ids match, so a worker that Playwright replaces

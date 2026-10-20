@@ -3,7 +3,7 @@
 // ----------------------------------------------------------------------------
 // Fires one POST /searches per OD and confirms results come back. This is the
 // fast, bot-proof equivalent of "did the search work + did fares show" for all
-// 12 MSC journeys. It is SEARCH-ONLY: it never books, pays, or writes anything.
+// sanity-check ODs (16 distinct ones). It is SEARCH-ONLY: it never books, pays, or writes anything.
 //
 // Tokens/endpoints are read AT RUNTIME from the user's Postman environment files
 // (gitignored). No secret is ever copied into this repo.
@@ -13,15 +13,19 @@
 // ============================================================================
 const fs = require('fs');
 const path = require('path');
+require('./lib/env').loadEnv();   // POSTMAN_DIR from .env
 
 // Configurable so this works on any teammate's machine: set POSTMAN_DIR to point at your own
 // exported Postman environment folder. Otherwise the first of these that exists is used — the
 // OneDrive folder was reorganised once already (Notes\Training\Postman json files ->
 // Training Material\Postman Collections), and the old path silently skipped both envs, so the
 // mail showed B2C as [check manually] with no error anywhere.
+// Built from the CURRENT user's own profile folder (not one person's name), so the same lookup
+// works on every teammate's machine that has the company OneDrive.
+const HOME_ONEDRIVE = path.join(require('os').homedir(), 'OneDrive - RAILEUROPE', 'Desktop');
 const POSTMAN_DIR_CANDIDATES = [
-  'C:\\Users\\PSalgaonkar\\OneDrive - RAILEUROPE\\Desktop\\Training Material\\Postman Collections\\LH',
-  'C:\\Users\\PSalgaonkar\\OneDrive - RAILEUROPE\\Desktop\\Notes\\Training\\Postman json files\\LH',
+  path.join(HOME_ONEDRIVE, 'Training Material', 'Postman Collections', 'LH'),
+  path.join(HOME_ONEDRIVE, 'Notes', 'Training', 'Postman json files', 'LH'),
 ];
 const POSTMAN_DIR = process.env.POSTMAN_DIR
   || POSTMAN_DIR_CANDIDATES.find((d) => fs.existsSync(d))
@@ -151,7 +155,7 @@ async function searchOne(endpoint, token, od, dateStr) {
     console.log(`    endpoint: ${endpoint}`);
     if (!usableToken(token)) { console.log('    -> no literal token in this env file (uses SSM); SKIPPED\n'); continue; }
 
-    // Fire all 12 routes concurrently (read-only search) — far faster than one-by-one,
+    // Fire all the routes concurrently (read-only search) — far faster than one-by-one,
     // and one slow/dead route no longer holds up the rest.
     const envT0 = Date.now();
     const rows = await mapPool(ODS, 5, async (od) => {

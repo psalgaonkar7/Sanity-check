@@ -214,7 +214,7 @@ test('SNCF Connect POS: search-only validation', async ({ page }) => {
 /**
  * The B2B order has a HARD CAP of 15 items — the portal answers the 16th add-to-cart with
  * "You have reached the maximum number of items in your order, please proceed to ...".
- * Full coverage needs 23 items (19 sectors + 4 passes), so the run builds SEVERAL orders and
+ * Full coverage needs 22 items (19 sectors + 3 passes), so the run builds SEVERAL orders and
  * captures a booking reference for each.
  *
  * This cap is also the real cause of a long-running mystery: 12 sectors + 3 passes is exactly
@@ -478,7 +478,8 @@ test('B2B: build carts and capture booking references (none expired)', async ({ 
   // ⛔ HARD STOP. We are on Traveler Details, status Created. We do NOT fill traveler data,
   // do NOT click "CONTINUE TO HOLD & PAYMENT" (that submits the order to the carrier's own
   // booking system — a real side effect we don't want on every automated run), do NOT touch
-  // details. The Prebooked booking reference is the proof of a successful MSC.
+  // details. The Created booking reference is the proof of a successful MSC
+  // (a Prebooked status here would mean the hard stop above was broken).
 });
 
 // Payment-page probe (sanity scenarios 2 and 8: "till payment page"). OPT-IN: MSC_PAYMENT_PROBE=1.
