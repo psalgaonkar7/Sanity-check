@@ -47,7 +47,14 @@ Other entry points: `npm run auth`, `npm run deck` (regenerates the manager deck
 - **Never pays.** The flow stops at Traveler Details, status `Created`, to capture the booking
   ref. It must not fill traveler details or reach Hold & Payment — that submits a real order to
   the carrier. Seeing `Prebooked` or a real carrier PNR means a regression; fix it back rather
-  than relabelling the result.
+  than relabelling the result. **One approved exception (2026-10-20, Pratikesh's call):** the
+  opt-in payment-page probe, `MSC_PAYMENT_PROBE=1` — ONE item taken to Hold & Payment, never
+  paid, which holds one real seat at the carrier (ROW pilot: SNCF PNR VLK5CY, whether it
+  lapses on its own is unverified). It is OFF by default; only that probe may reach `Prebooked`.
+  The China part of the probe is not working yet (traveler form timeout).
+- **Full China booking is opt-in** (`npm run china-full`, ~9 min, Z… refs). `npm run sanity`
+  books only ONE China train (~45 s). Do not add the full China booking to the default run:
+  the run has to stay about 7-10 min.
 
 ## Layout
 

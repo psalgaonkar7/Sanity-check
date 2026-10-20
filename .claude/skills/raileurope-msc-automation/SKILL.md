@@ -24,6 +24,12 @@ LocoHub admin lookup showing a real provider PNR for a sector that reached it.
 carrier admin panel, or the status reads `Prebooked`, something has regressed back to
 advancing past Traveler Details. Fix it back to stopping there; don't relabel the result.
 
+**One approved exception (2026-10-20):** the opt-in payment-page probe (`MSC_PAYMENT_PROBE=1`,
+off by default) takes ONE item to Hold & Payment with generic traveler details and never pays;
+it holds one real seat at the carrier. Only that probe may reach `Prebooked`. The full 22-item
+booking on customer care China is opt-in too (`npm run china-full`, ~9 min); the default run
+books one China train.
+
 ## ⚠️ Run only ONE instance at a time
 
 Every browser check shares **one B2B account, one cart, one POS**. Never start a run
@@ -91,18 +97,27 @@ them `npm run auth:b2b` instead, which skips the AWS step entirely.
 4. **Extra checks** (`extra-checks.js`, in parallel): Primer status API, AppFlow
    `tf-era-prod-shared-salesforce-flow` (Group Bookings–SF sync), both China portals, and the
    SF *Technical HD view* case count. Each degrades to SKIPPED with a fix when a login lapses.
-5. **Slack + mail** (`notify.js`, last step): posts `Sanity done HH:MM IST- <refs>` to
-   #sd_24-7 via `SLACK_WEBHOOK_URL` in `.env`, and opens the sanity mail as an Outlook draft.
+5. **Mail + result DM** (`notify.js`, last step): opens the sanity mail as an Outlook draft, then
+   DMs Pratikesh the result through the **Pratikesh Assistant** workflow webhook
+   (`SLACK_ALERT_WEBHOOK`, same payload as `RE/Assistant`). **Nothing goes to a team channel**:
+   the #sd_24-7 "Sanity Bot" post was retired on 2026-10-20. The mail ends with the Sanity
+   Tracker link and has the 4 account lines (key account ROW, agents ROW, key account China,
+   customer care China): OK only after that account's saved login ran a real search
+   (`lib/portals.js`; `npm run auth:portals` renews the logins). Customer care China also
+   books one train to a booking ref (Traveler Details, Created; own cart, runs in parallel).
+   Booking refs are on their portal's line (point 1 ROW, point 7 China), not in the subject.
 
-### Rules for the Slack post and the mail — do not weaken these
+### Rules for the DM and the mail — do not weaken these
 
 - The mail is **never sent automatically**. It opens as a compose window; a person sends it.
   Do not add SMTP/Graph sending.
-- Slack posts **only** for a complete run with booking references, once per slot. Never loosen
-  `shouldPost()` so a failed or partial run announces "Sanity done".
+- Never post to a team channel again (no `SLACK_WEBHOOK_URL`, no Sanity Bot). The DM goes to
+  Pratikesh only, every run, a KO included.
+- The DM's paste-ready `Sanity done HH:MM IST- <refs>` line appears **only** for a complete run
+  with booking references (`bookingIssues()` empty). Never loosen that so a failed or partial
+  run offers "Sanity done".
 - Never write `OK` for something the run did not verify — it is `[check manually]`.
-- When testing, use `node notify.js --dry-run` or set `MSC_NO_SLACK=1` / `MSC_NO_MAIL=1`.
-  Do not post test messages to #sd_24-7: it is the team's live channel.
+- When testing, use `node notify.js --dry-run` or set `MSC_NO_DM=1` / `MSC_NO_MAIL=1`.
 - AppFlow is **event**-triggered — "no recent run" is not a failure; only a failed run is.
 - The China check must **not** use `blockNoise()` — the key-account `.cn` portal never boots
   without the hosts it blocks, so it would read as down on every run.

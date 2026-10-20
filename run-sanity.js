@@ -58,7 +58,7 @@ function startBackground(cmd) {
 
   // Deck refresh is silent on success — only shout if it couldn't update (needs attention).
   const deckNote = deck === 0 ? '' : '  ·  ⚠ DECK NOT UPDATED — close Rail-Europe-MSC-Automation-Overview.pptx and run `npm run deck`';
-  // Slack post (#sd_24-7, only for a complete run) + the sanity mail draft (never auto-sent).
+  // The sanity mail draft (never auto-sent) + the result DM to Pratikesh via the Assistant webhook.
   run('node notify.js');
 
   console.log(`=== sanity done · browser ${b2b === 0 ? 'PASS' : 'FAIL'} · api ${api === 0 ? 'PASS' : 'FAIL'} ===${deckNote}`);

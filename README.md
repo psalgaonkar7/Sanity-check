@@ -225,7 +225,7 @@ merge conflicts.
 
 ---
 
-## Extra checks, Slack post and the sanity mail
+## Extra checks, result DM and the sanity mail
 
 `npm run sanity` covers the rest of the team's sanity mail as well, in the same run and with no
 extra time: the extra checks run in parallel with the browser suite.
@@ -258,62 +258,70 @@ Every check degrades to **SKIPPED** with a one-line fix when a login it depends 
 — never a false OK and never a false KO. Skipped items appear as `[check manually]` in the
 mail. Run them on their own with `node extra-checks.js`.
 
-### Slack post (`notify.js`)
+### Result DM (`notify.js`) — to Pratikesh, via Pratikesh Assistant
 
-At the end of a run it posts the team's format to **#sd_24-7**:
-
-```
-Sanity done 00:00 IST- K070439139, K442252781
-```
-
-The time is the **slot**, not the finish time: the run's start rounded to the nearest hour in
-IST (a run started at 23:58 or 00:03 is the 00:00 slot). Force a slot with `MSC_SLOT=HH:MM`.
-
-It posts **only** when the run is real and complete. It does not post when:
-
-- the browser suite did not finish (the booking report is not from this run)
-- no booking reference was captured, or an order had expired items
-- it was a partial run (`MSC_MAX_SECTORS`) — only full runs are announced
-- that slot was already posted (so a re-run in the same slot does not post twice)
-
-In every one of those cases it prints the reason instead, and it always prints the line itself,
-so you can post by hand if you need to.
-
-**Setup, once — get a webhook URL for #sd_24-7.** Either kind works; try the first, since it
-often needs no admin:
-
-1. **Workflow Builder webhook** (`https://hooks.slack.com/triggers/...`). In Slack, create a new
-   workflow that **starts from a webhook**, give it one variable named **`text`**, and add a
-   *Send a message to a channel* step to #sd_24-7 whose message is that `text` variable.
-   Publish it and copy the webhook URL. Whether this option is available depends on your
-   workspace's workflow permissions; the creator must be a member of #sd_24-7.
-2. **Classic incoming webhook** (`https://hooks.slack.com/services/...`). Create a Slack app at
-   api.slack.com/apps, turn on *Incoming Webhooks*, and add a webhook for #sd_24-7. Most
-   workspaces send this to a Slack admin for approval.
-
-Put the URL in `.env` (copy `.env.example`):
+Since 2026-10-20 nothing is posted to a team channel. The old "Sanity Bot" post to #sd_24-7 is
+retired. At the end of a run, the result comes to **you as a Slack DM** through the **Pratikesh
+Assistant** workflow. It uses the same webhook as `RE/Assistant`, `SLACK_ALERT_WEBHOOK`, and the
+same payload (`sr_key` "Pratikesh Assistant", headline in `severity`), so the workflow needs no
+change. Its fixed first line reads `🚨 SR alert: Pratikesh Assistant (proposed Sanity OK 22:00 IST)`.
+The rest is plain text:
 
 ```
-SLACK_WEBHOOK_URL=https://hooks.slack.com/...
+🟢 Sanity OK - 22:00 IST · took 6.2 min           (or 🔴 Sanity KO - 2 checks failed …)
+👉 NEEDS YOU                     each KO line with its reason (only when something failed)
+👉 CHECK YOURSELF BEFORE SENDING THE MAIL     the [check manually] items, with why
+✅ RESULT (same as the mail)     the 11 points
+📋 For the team channel, if you want to post it:
+Sanity done 22:00 IST- K070439139, K442252781
+📧 Mail draft is open in Outlook: click in the body, Ctrl+V, review, Send.
 ```
 
-Then confirm it works:
+- **Every run is DMed, a KO included.** One DM per run: re-running `node notify.js` for the same
+  run does not DM twice (`report/.dm-sent.json`).
+- The **"Sanity done" line** is the team's format, ready to paste. It only appears for a real,
+  complete run. If the browser suite did not finish, no booking reference was captured, an order
+  had expired items, or it was a partial run (`MSC_MAX_SECTORS`), the DM says
+  *Do not post "Sanity done"* instead. The time is the **slot**: the run's start rounded to the
+  nearest hour in IST. Force one with `MSC_SLOT=HH:MM`.
+- The webhook is read from the environment. If the window was opened before `setx`, it is read
+  from the Windows user environment (HKCU); `.env` also works.
+- `MSC_NO_DM=1` skips the DM for a run (`MSC_NO_SLACK=1` also works).
+  `node notify.js --dry-run` prints the DM text and sends nothing.
+- A failed DM is reported in the console (HTTP status) and never stops the run or the mail.
 
-```bash
-npm run check-slack
-```
+The mail ends with the **Sanity Tracker** link again ("Details Sanity check result:- / Sanity
+Tracker.xlsx"; override with `SANITY_TRACKER_URL`).
 
-For a classic webhook this is a real test that **posts nothing**: a live webhook rejects the
-empty test payload with `no_text`, while a revoked or mistyped one answers differently. A
-Workflow Builder webhook cannot be tested without posting (any call runs the workflow), so only
-its format is checked and the first real run confirms it.
+### Account lines (key account ROW, agents ROW, key account China, customer care China)
 
-The two kinds acknowledge differently (`ok` vs `{"ok":true}`) — both are handled.
+Each of the 4 accounts is opened with its **own saved login** (`auth/<account>.json`, made by
+`npm run auth:portals`; no account accepts another's session) and a real train search is run
+(Paris→Bordeaux, then London→Paris, then Vienna→Munich). The mail line is **OK only when that
+search returned trains**. An expired login reads `[check manually]`, never a false OK. Same
+checks run in parallel with the booking, so they add no time.
 
-`.env` is git-ignored. Treat the webhook URL as a secret — anyone who has it can post to the
-channel. Until it is set, the run prints the Slack line and says it was not posted.
+**Customer care China also books** (`book: true` in `lib/portal-list.js`): it empties its cart,
+carts one train from the search that worked, and captures a booking reference on Traveler
+Details (status Created) — same stopping point as the main run, never Hold & Payment, never
+pays. Its cart is separate from customercare.raileurope.com's (own `/api/carts` on the .cn host,
+checked 2026-10-20), so it runs alongside the main booking. Search OK but booking failed = KO.
 
-`MSC_NO_SLACK=1` skips posting for a run.
+**The full 22-item booking on China is opt-in:** `npm run china-full` (about 9 min, own report
+`report/msc-b2b-chinaCustomerCare.json`, never touches the main sanity report). 2026-10-20 test:
+`Z776330917(14), Z400875750(6)`, 17/19 sectors + 3/3 passes (RegioJet's two sectors failed on
+ROW and China alike). `node china-full.js rowAgent` runs it on another portal.
+
+**Payment-page probe (opt-in, `MSC_PAYMENT_PROBE=1`):** one Paris→Bordeaux train on customer
+care ROW goes through traveler details (generic data: Sanity / Test, a do-not-use email) to the
+Hold & Payment page and stops. The page's own button ("Continue to put your booking on hold")
+is only checked for, never clicked. Pilot 2026-10-20: reached, K631939197 Prebooked, SNCF PNR
+VLK5CY, +1.3 min. It holds one real seat per run, so it stays off until you decide. The China
+part of the probe is not working yet (traveler form timeout).
+
+**Booking refs are on the line of the portal that made them, not in the subject:** point 1
+`OK (Booking ref: K…, K…)` for customer care ROW, point 7 `OK (Booking ref: K…)` for China.
+`npm run auth:portals` only opens a window for the accounts whose login has expired.
 
 ### The sanity mail (never sent automatically)
 
@@ -335,7 +343,7 @@ Honesty rules built into the draft:
   than turning it into KO — whether they matter is the team's call, not the script's.
 - The subject also flips to `KO` if the booking suite itself didn't reach Traveler Details
   and capture a reference per order — not shown as its own numbered point (kept to the
-  standard 8), but checked silently via the same gate that blocks the Slack post
+  standard 8), but checked silently via the same gate that withholds the "Sanity done" line in the DM
   (`bookingIssues()` in notify.js). Added 2026-09-30 after a run where the browser suite
   timed out with zero booking references (a real portal-side "not enough seats" error) while
   every other item still read OK, so the subject alone would have said OK with nothing to
@@ -608,7 +616,10 @@ LH_ONLY=production npm run api        # the ODs still return products
 ## Safety guardrails (built in, not optional)
 
 - ✅ **Stops at Traveler Details** (status `Created`) — never fills traveler data, never
-  clicks "Continue to Hold & Payment", so **nothing is ever submitted to a carrier**
+  clicks "Continue to Hold & Payment", so **nothing is ever submitted to a carrier**.
+  *Only exception, opt-in and off by default:* `MSC_PAYMENT_PROBE=1` takes ONE item to the
+  Hold & Payment page with generic traveler data (never pays; it holds one real seat at the
+  carrier)
 - ✅ Never selects/changes a payment method, never touches billing fields, never pays
 - ✅ Never uses agency allowance
 - ✅ The API layer only searches — never books
@@ -617,8 +628,9 @@ LH_ONLY=production npm run api        # the ODs still return products
 - ✅ Connectivity issues are **flagged for manual review only** — nothing is auto-sent
   to Teams, email, or a ticketing system
 - ✅ The **sanity mail is never sent automatically** — it opens as a draft for a person to
-  review and send. The only thing posted automatically is the one-line Slack completion
-  notice, and only for a complete run with booking references
+  review and send. Nothing is posted to a team channel: the only automatic message is the
+  result DM to you (via Pratikesh Assistant), and its "Sanity done" line is there only for a
+  complete run with booking references, for you to paste
 - ✅ The SNCF Connect POS check is **search-only**, and always switches the POS back
   explicitly (navigating away does **not** reset it — it's an account-level setting)
 
@@ -641,8 +653,8 @@ tools/verify-station-labels.js read-only check that every route in data/journeys
                                country — `npm run verify-routes`
 api-searchability.js       read-only LocoHub API check, staging + production
 extra-checks.js            Primer, AppFlow (Group Bookings–SF sync), China portals, SF cases — in parallel
-notify.js                  end of run: Slack post to #sd_24-7 + the sanity mail draft (never auto-sent)
-.env.example               template for .env (Slack webhook, mail To:, SF alias) — .env itself is git-ignored
+notify.js                  end of run: the sanity mail draft (never auto-sent) + result DM to you via Pratikesh Assistant
+.env.example               template for .env (mail To:, SF alias, optional DM webhook) — .env itself is git-ignored
 run-sanity.js              orchestrates: browser suite ‖ API check -> deck refresh -> history log -> summary
 print-summary.js           human-readable end-of-run summary (also runnable standalone)
 log-run.js                 appends one summary line per run to run-history.jsonl

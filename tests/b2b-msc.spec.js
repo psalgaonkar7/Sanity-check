@@ -11,6 +11,13 @@ const { test, expect } = require('@playwright/test');
 const data = require('../data/journeys');
 const H = require('../lib/helpers');
 
+// PORTAL=<key> (project "portal" in playwright.config.js) runs ONLY the booking test against
+// another portal (e.g. China customer care), saving its results to report/msc-b2b-<key>.json so
+// the main customercare report is never touched.
+const PORTAL = process.env.PORTAL
+  ? require('../lib/portal-list').PORTALS.find((p) => p.key === process.env.PORTAL) : null;
+const REPORT_FILE = PORTAL ? `report/msc-b2b-${PORTAL.key}.json` : 'report/msc-b2b.json';
+
 const DATE = H.futureDate(data.daysAhead);
 const report = { date: new Date().toISOString(), testDate: DATE, connectivity: [], sncfPos: [], booking: null, sectors: [], issues: [] };
 
@@ -41,7 +48,7 @@ function persist() {
   fs.mkdirSync('report', { recursive: true });
   let existing = null;
   try {
-    const onDisk = JSON.parse(fs.readFileSync('report/msc-b2b.json', 'utf8'));
+    const onDisk = JSON.parse(fs.readFileSync(REPORT_FILE, 'utf8'));
     if (onDisk.runId && onDisk.runId === RUN_ID) existing = onDisk;
   } catch {}
   const merged = existing ? {
@@ -62,14 +69,17 @@ function persist() {
     sectorsInCart: report.sectorsInCart ?? existing.sectorsInCart ?? null,
     sectorsTotal: report.sectorsTotal ?? existing.sectorsTotal ?? null,
     passesInBooking: pick(report.passesInBooking, existing.passesInBooking),
+    paymentProbe: report.paymentProbe || existing.paymentProbe || undefined,
     issues: [...(existing.issues || []), ...report.issues].filter((v, i, arr) =>
       arr.findIndex((x) => JSON.stringify(x) === JSON.stringify(v)) === i),
   } : report;
-  fs.writeFileSync('report/msc-b2b.json', JSON.stringify(merged, null, 2));
+  if (PORTAL) { merged.portal = PORTAL.key; merged.portalUrl = PORTAL.url; }
+  fs.writeFileSync(REPORT_FILE, JSON.stringify(merged, null, 2));
 }
 
 // Drop unreachable third-party analytics/AB hosts; they add ~38s per page load here.
-test.beforeEach(async ({ context }) => { await H.blockNoise(context); });
+// Not on the China portals: the key-account .cn portal never boots without those hosts.
+test.beforeEach(async ({ context }) => { if (!(PORTAL && PORTAL.china)) await H.blockNoise(context); });
 
 test.afterEach(persist);   // flush as we go, so a worker swap can't lose completed work
 test.afterAll(persist);
@@ -234,7 +244,7 @@ async function clearCart(page) {
 test('B2B: build carts and capture booking references (none expired)', async ({ page }) => {
   // Several orders, each up to 15 items — give the whole thing room rather than being killed
   // mid-batch with only part of the coverage recorded.
-  test.setTimeout(30 * 60 * 1000);
+  test.setTimeout(PORTAL ? 20 * 60 * 1000 : 30 * 60 * 1000);   // a stuck portal must not hold the run for 30 min
   await clearCart(page);
   await page.goto('/home');
   // Wait for the search form to actually be ready before the loop starts hammering it.
@@ -469,4 +479,37 @@ test('B2B: build carts and capture booking references (none expired)', async ({ 
   // do NOT click "CONTINUE TO HOLD & PAYMENT" (that submits the order to the carrier's own
   // booking system — a real side effect we don't want on every automated run), do NOT touch
   // details. The Prebooked booking reference is the proof of a successful MSC.
+});
+
+// Payment-page probe (sanity scenarios 2 and 8: "till payment page"). OPT-IN: MSC_PAYMENT_PROBE=1.
+// ONE item (Paris->Bordeaux, SNCF) in a fresh cart -> Traveler Details with dummy data ->
+// Hold & Payment, then STOP. Proves the whole path up to the payment page works.
+// ⚠ Reaching Hold & Payment submits that one item to the carrier and holds it there (provider PNR,
+// status Prebooked) — the reason the old 22-item version was reverted. Kept to a single item and
+// off by default until Pratikesh has checked what the held item does after a pilot run.
+// ⛔ Never clicks "CONTINUE TO PAY", never picks a payment method, never touches Allowance/billing.
+test('B2B: payment-page probe (one item, never pays)', async ({ page }) => {
+  test.skip(process.env.MSC_PAYMENT_PROBE !== '1', 'opt-in: MSC_PAYMENT_PROBE=1');
+  test.setTimeout(5 * 60 * 1000);
+  const journey = data.ptpJourneys.find((j) => j.id === (data.paymentProbeJourneyId || 19));
+  report.paymentProbe = { route: `${journey.from.q}->${journey.to.q}`, reachedPayment: false, ref: null, status: null, error: null };
+  try {
+    await clearCart(page);   // the main run's orders are already captured; start clean
+    await page.goto('/home');
+    await page.locator(H.SEL.from).first().waitFor({ state: 'visible', timeout: 40000 });
+    await H.searchJourney(page, journey, DATE);
+    if (journey.carrierSlug) await H.addFareForCarrier(page, journey.carrierSlug);
+    else await H.addFirstStandardToCart(page);
+    await page.goto('/cart');
+    const r = await H.reachPaymentPage(page);
+    Object.assign(report.paymentProbe, r);
+    await page.screenshot({ path: 'report/payment-probe.png', fullPage: true }).catch(() => {});
+    console.log(`[payment-probe] ${r.reachedPayment ? 'payment page reached' : 'payment page NOT reached'} · ref=${r.ref} status=${r.status} · ${r.url}`);
+  } catch (e) {
+    report.paymentProbe.error = String(e).split('\n')[0];
+    await page.screenshot({ path: 'report/payment-probe.png', fullPage: true }).catch(() => {});
+    console.log(`[payment-probe] FAILED: ${report.paymentProbe.error}`);
+  }
+  expect(report.paymentProbe.reachedPayment, `payment page should be reached (${report.paymentProbe.error || 'pay button not seen'})`).toBeTruthy();
+  // ⛔ HARD STOP on Hold & Payment.
 });

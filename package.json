@@ -5,6 +5,8 @@
   "scripts": {
     "auth": "node auth.js",
     "auth:b2b": "playwright test --project=setup --headed",
+    "auth:portals": "node auth-portals.js",
+    "china-full": "node china-full.js",
     "msc": "playwright test --project=b2b tests/b2b-msc.spec.js",
     "passes": "playwright test --project=b2b tests/b2b-passes.spec.js",
     "booking": "playwright test --project=b2b tests/b2b-msc.spec.js -g \"build cart\"",
@@ -15,8 +17,7 @@
     "log": "node log-run.js",
     "weekly": "node weekly-report.js",
     "report": "playwright show-report report/html",
-    "verify-routes": "node tools/verify-station-labels.js",
-    "check-slack": "node notify.js --check-slack"
+    "verify-routes": "node tools/verify-station-labels.js"
   },
   "keywords": [
     "raileurope",
