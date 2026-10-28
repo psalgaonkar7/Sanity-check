@@ -55,17 +55,19 @@ instead through the **Production API check** (#6), which is the same engine B2C 
 
 ## Carrier coverage
 
-The connectivity page currently advertises **28 status lines / 26 distinct carriers**
-across three inventories. `TRENITALIA` and `SBB` appear in **both** point-to-point and
-passes and can report **different statuses at the same time**, which is why the parse is
-section-aware — flattening them made the escalation list self-contradictory and hid one
-of two outages.
+The run books a **fixed list of 19 point-to-point sectors** (`ptpJourneys` in
+`data/journeys.js`, one per carrier or carrier family) plus **3 rail passes**. Since
+**2026-10-28** nothing reads the B2B connectivity (health-center) page any more, so the list
+is no longer checked against it: if a carrier is added to or removed from that page, the run
+will **not** notice. Keep `data/journeys.js` up to date by hand (see "Discovering /
+re-checking carrier routes" below). The list was built in September against the 26
+carriers the page advertised then.
 
 Coverage is **explicit, not inferred**. Each journey in `data/journeys.js` carries:
 
 | Field | Purpose |
 |---|---|
-| `connectivityNames` | the EXACT health-center names this journey proves |
+| `connectivityNames` | the carrier name(s) this journey stands for. Now only a label (nothing compares it to the connectivity page); kept so it is clear which carrier a route proves |
 | `carrierSlug` | prefix of the results-page `data-select="ptp-carrier-logo-<slug>"` |
 | `fromCode` / `toCode` | LocoHub station codes (so the API check derives routes from here) |
 
@@ -81,12 +83,21 @@ Slugs are matched as a **prefix** because operators sell under sub-brands —
 `trenitalia_frecciarossa`, `dbahn` covers `dbahn_intercity_express`. SNCF has no `sncf`
 logo at all; it sells as `tgvinoui`.
 
-**Current status: 22 of 26 covered, 0 unmapped.**
+**What is covered:** the 19 sectors, in the order of `ptpJourneys`: OBB, DB, DBSNCF (Alleo),
+EUROSTAR, LYRIA, RDG, SNCB, RENFE, IRYO, OUIGO, RHB/SBB, RegioJet (REJE and RJET), TRENITALIA,
+ITALO, EUROPEAN SLEEPER, LEO EXPRESS, TER (regional) and SNCF (TGV INOUI); and the 3 passes
+(Interrail Global, Swiss Travel Pass, BritRail), each added to the same B2B cart.
 
-- **Excluded deliberately:** `HEPSTAR` — an insurance service, not a bookable rail product.
+- **Excluded deliberately:** `HEPSTAR` — an insurance service, not a bookable rail product
+  (`connectivityOnly` in `data/journeys.js`).
 - **Pending a confirmed route:** `ARENAWAYS`, `CAMPANIA EXPRESS`, `SJ` — each was down or
-  unknown during discovery, so no route is asserted rather than guessing one. Re-run the
-  discovery tool when they recover.
+  unknown during discovery, so no route is asserted rather than guessing one
+  (`pendingDiscovery`). Re-run the discovery tool when they recover.
+- **Not proven directly:** `TER` and `RHB` are covered indirectly (see the notes in
+  `data/journeys.js`); do not read them as a direct carrier check.
+- **A dropped sector** (e.g. RegioJet RJET) is in the run summary only: it is dropped after
+  the primary route and all backup routes failed, and it does not turn a mail line KO by
+  itself, so look at it yourself.
 
 > **Note on the official MSC sheet:** its `TER / SNCF — Paris-Stuttgart` row is
 > misleading. That route returns `dbahn`, `dbahn_intercity_express`, `dbsncf` and
@@ -611,8 +622,7 @@ Get-CimInstance Win32_Process -Filter "Name='node.exe'" | Where-Object { $_.Comm
 Read the error text — it names **every route tried** and the last reason, because a sector
 is only failed once all 3–6 of its routes have failed. `NO RESULTS` on every route means
 the carrier is genuinely not sellable anywhere we look; a mix usually means something
-transient. Check whether the carrier is already on the connectivity flag list first — a
-flagged carrier is reported as `EXPECTED (carrier flagged)`, not a regression.
+transient. Check older run summaries first (`run-history.jsonl`): a carrier that was already dropped on earlier days is a known problem, not a new regression. (The connectivity flag list that used to mark carriers `EXPECTED (carrier flagged)` was removed on 2026-10-28.)
 
 ### A pass reports ERROR but the others pass
 
@@ -683,8 +693,9 @@ LH_ONLY=production npm run api        # the ODs still return products
 playwright.config.js       projects: setup (login) / b2b / b2c / portal (opt-in, PORTAL=<key>) · workers:1
 data/journeys.js           19 sectors + 3 passes + SNCF POS ODs + portal search routes + coverage metadata
 lib/helpers.js             reusable flow steps: SEL selector map, login state, search, carrier-specific
-                           add-to-cart, pass add, POS switch, connectivity parse/flag, coverage guard,
-                           blockNoise, and the opt-in payment-page probe (reachPaymentPage)
+                           add-to-cart, pass add, POS switch,
+                           blockNoise (the old connectivity parse/flag + coverage-guard functions are still in the
+                           file but unused since 2026-10-28), and the opt-in payment-page probe (reachPaymentPage)
 lib/portal-list.js         the 4 other portals (key account / agents ROW, key account / customer care China)
 lib/portals.js             logged-in search on each portal; one-train booking on customer care China
 lib/env.js                 .env loader shared by run-sanity / notify / extra-checks / api-searchability
@@ -692,7 +703,7 @@ auth.js                    `npm run auth`: AWS SSO, then the B2B login (tests/au
 auth-portals.js            `npm run auth:portals`: saves the 4 portal logins into auth/ (only expired ones)
 china-full.js              `npm run china-full`: opt-in full 22-item booking on customer care China
 tests/auth.setup.js        one-time manual login -> storageState.json
-tests/b2b-msc.spec.js      connectivity + coverage guard + SNCF POS + batched carts/booking references
+tests/b2b-msc.spec.js      SNCF POS + batched carts/booking references (+ the opt-in payment-page probe)
 tests/b2b-passes.spec.js   rail pass searchability (Interrail + Swiss + BritRail)
 tests/b2c-searchability.spec.js   B2C search checks (blocked by anti-bot; reports as such)
 tools/discover-carriers.js     read-only carrier↔route discovery (not part of `npm run sanity`)
