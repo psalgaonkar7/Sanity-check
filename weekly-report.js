@@ -46,13 +46,12 @@ md += `| Failed (no booking) | ${failed.length} |\n`;
 md += `| API Production all routes PASS | ${prodPass} / ${prodRuns} runs |\n\n`;
 
 md += `## Every run\n\n`;
-md += `| When | Booking | Trains | Pass | API Prod | API Stg | Dropped | Flagged carriers |\n|---|---|---|---|---|---|---|---|\n`;
+md += `| When | Booking | Trains | Pass | API Prod | Dropped |\n|---|---|---|---|---|---|\n`;
 for (const r of rows) {
-  md += `| ${d(r.ts)} | ${r.booking || '—'} | ${r.trains || '—'} | ${r.pass ? r.pass.replace('Global Mobile ', '') : '—'} | ${r.apiProd || '—'} | ${r.apiStaging || '—'} | ${(r.dropped || []).join(', ') || '—'} | ${(r.flags || []).join(', ') || '—'} |\n`;
+  md += `| ${d(r.ts)} | ${r.booking || '—'} | ${r.trains || '—'} | ${r.pass ? r.pass.replace('Global Mobile ', '') : '—'} | ${r.apiProd || '—'} | ${(r.dropped || []).join(', ') || '—'} |\n`;
 }
 
 md += `\n## Observations & recurring issues\n\n`;
-if (topFlags.length) md += `- **Most-flagged carriers (RED >15 min):** ${topFlags.map(([c, n]) => `${c} (${n}×)`).join(', ')}\n`;
 if (topDrops.length) md += `- **Sectors that dropped from the cart:** ${topDrops.map(([s, n]) => `${s} (${n}×)`).join(', ')}\n`;
 else md += `- No sectors dropped this week — every run built the full cart.\n`;
 if (failed.length) md += `- **⚠ ${failed.length} run(s) captured no booking** — investigate (network/login/portal at that time).\n`;

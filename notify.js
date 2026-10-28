@@ -219,12 +219,9 @@ function buildItems() {
     ccChina.proof = `Booking ref: ${bk.ref}${bk.reachedPayment ? '; payment page reached' : ''}`;
   }
 
-  const rows = b2b.connectivityRows || [];
-  const unmapped = (b2b.coverage && b2b.coverage.unmapped) || [];
-  const flagged = (b2b.connectivityEscalations || []).map((x) => x.carrier);
-  const conn = !rows.length ? { v: 'KO', ok: false, note: 'connectivity page was not read' }
-    : unmapped.length ? { v: 'KO', ok: false, note: 'unmapped carrier: ' + unmapped.join(', ') }
-      : { v: 'OK', ok: true, note: flagged.length ? 'flagged >15 min, for your review: ' + flagged.join(', ') : null };
+  // The "B2B :- System Connectivity Status" line was REMOVED from the mail and the DM on
+  // 2026-10-28 (Pratikesh: it must be excluded from the sanity run — it read KO on a carrier or
+  // page problem that the booking run already shows). The mail is now 10 points.
 
   const pos = b2b.sncfPos || [];
   const sncf = !pos.length ? { v: MANUAL, ok: null, note: 'SNCF check did not run' }
@@ -255,7 +252,6 @@ function buildItems() {
 
   return [
     { label: 'B2C & B2B :- Check OD on B2C & B2B website', ...b2c },
-    { label: 'B2B :- System Connectivity Status', ...conn },
     { label: 'Group Bookings-Salesforce Sync', ...fromExtra(extras.appflow) },
     // Account lines: OK only when that portal's saved login got a logged-in train search that
     // returned results (lib/portals.js). An expired login reads [check manually], never a false OK.
@@ -276,7 +272,7 @@ const shown = (it) => it.v + (it.proof ? ` (${it.proof})` : '');
 
 function buildMail(items) {
   const bad = items.filter((i) => i.ok === false);
-  // Not shown as its own numbered line (kept to the 11 standard points), but a booking suite
+  // Not shown as its own numbered line (kept to the 10 standard points), but a booking suite
   // that didn't finish/capture a reference must still flip the subject to KO — see
   // bookingIssues(), the same check that withholds the "Sanity done" line in the DM.
   const status = (bad.length || bookingIssues().length) ? 'KO' : 'OK';

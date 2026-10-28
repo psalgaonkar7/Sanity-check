@@ -67,7 +67,7 @@ flow if this automation is unavailable.
 
 Useful env vars: `MSC_MAX_SECTORS=4` (validate on a subset first — do this before any
 full run after changing selectors), `MSC_MAX_ITEMS_PER_ORDER`, `MSC_DAYS_AHEAD`,
-`HEADED=1`, `LH_ONLY=production`.
+`HEADED=1`.
 
 ### If login has expired
 
@@ -85,13 +85,17 @@ them `npm run auth:b2b` instead, which skips the AWS step entirely.
 ## What it checks
 
 1. **B2B browser suite** (`tests/b2b-msc.spec.js`, `tests/b2b-passes.spec.js`):
-   - **section-aware** connectivity read (Point-to-point / Passes / Services) — flags any
-     carrier RED/unstable >15 min per SOP rule #1
-   - **carrier-coverage guard** — every carrier on the page must be booked, passed,
-     knowingly excluded, or explicitly pending a route, else `UNMAPPED CARRIER`
+   - The carrier-**connectivity** read and the **coverage guard** were **removed from the run
+     entirely** on 2026-10-28 (Pratikesh: "exclude the connectivity page"): no test, no console
+     output, no mail point, no history field. Do not re-add them or treat the page as a KO.
+     Already-down carriers are no longer built last or labelled `EXPECTED`; they just show up
+     as dropped sectors in the summary.
    - SNCF Connect POS search-only validation (3 ODs), then switches POS **back explicitly**
    - **19 sectors + 3 passes** built into batched carts → one booking reference per order
-2. **API searchability** (`api-searchability.js`): LocoHub API on staging + production.
+2. **API searchability** (`api-searchability.js`): LocoHub API on **production only**
+   (the staging check was removed on 2026-10-28). It counts products per OD and does NOT look
+   at the carrier brand, so a PASS can be another carrier's trains (RJET Wien→Gyor passes on
+   ÖBB trains while RegioJet has none).
    Runs **in parallel** with the browser suite. Also how B2C's engine is validated, since
    B2C itself is anti-bot blocked.
 3. **Manager deck** (`deck/gen.js`) and **run history** (`log-run.js` → `npm run weekly`).
@@ -107,7 +111,8 @@ them `npm run auth:b2b` instead, which skips the AWS step entirely.
    customer care China): OK only after that account's saved login ran a real search
    (`lib/portals.js`; `npm run auth:portals` renews the logins). Customer care China also
    books one train to a booking ref (Traveler Details, Created; own cart, runs in parallel).
-   Booking refs are on their portal's line (point 1 ROW, point 7 China), not in the subject.
+   Booking refs are on their portal's line (point 1 ROW, point 6 China), not in the subject.
+   **The mail has 10 points** (the connectivity point was removed 2026-10-28; SF is point 10).
 
 ### Rules for the DM and the mail — do not weaken these
 
@@ -185,11 +190,10 @@ Read `report/msc-b2b.json`, `report/msc-api-searchability.md`, and the console s
 ("RAIL EUROPE MSC — SANITY RUN SUMMARY"). Lead with:
 - **Booking references** (K + 9 digits, one per order) — status reads `Created`, expected
 - Sectors in cart and passes in cart, expired count (must be 0)
-- **Carrier coverage** — covered/pending/excluded, and loudly if anything is `UNMAPPED`
-- API PASS counts for staging and production
-- Any connectivity flags (RED/unstable >15 min) with affected ODs — these need manual
-  review (cross-check on Trainline, escalate per Critical Incident Management if
-  confirmed); **never auto-escalate yourself**
+- API PASS count for production
+- Any DROPPED sector (e.g. RegioJet) with the reason — it does not turn a mail line KO, so
+  say so; a carrier problem needs manual review (cross-check on Trainline, escalate per
+  Critical Incident Management if confirmed); **never auto-escalate yourself**
 
 Do **not** send the daily team email or write a separate one — `notify.js` already opens the
 draft for a person to review and send; just report findings back to the user.

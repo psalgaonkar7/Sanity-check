@@ -39,12 +39,11 @@ has already caused two misdiagnoses. For the same reason `playwright.config.js` 
 
 | # | Check | How |
 |---|---|---|
-| 1 | **Carrier connectivity** | Reads the B2B health-center page **section-aware** (Point-to-point / Passes / Services). Flags any carrier RED/unstable **> 15 min** (SOP rule #1) with the affected route — **manual review only**, nothing is auto-sent anywhere |
-| 2 | **Carrier coverage guard** | Asserts every carrier on the connectivity page is booked, passed, knowingly excluded, or explicitly pending a route. Anything else is reported as **`UNMAPPED CARRIER`** so coverage cannot drift silently when Rail Europe adds a carrier |
+| – | ~~Carrier connectivity~~ and ~~coverage guard~~ | **Removed from the sanity run entirely on 2026-10-28** (Pratikesh's call: "exclude the connectivity page"). The "Pre-flight: connectivity status" test no longer exists, so the B2B health-center page is not read, printed, mailed, DMed or logged, and an unmapped or down carrier cannot make anything KO. Accepted consequences: already-down carriers are no longer built last or labelled `EXPECTED` (they show as dropped sectors in the run summary), and a new unmapped carrier is no longer noticed. The parser/coverage helpers stay in `lib/helpers.js`, unused |
 | 3 | **19 point-to-point sectors + 3 rail passes** | Built into shared carts, proceeding to Traveler Details to capture a booking reference per order (status **Created**), asserting no item is expired. Stops there — no traveler data, no Hold & Payment, no payment |
 | 4 | **SNCF Connect key-account POS** | Switches POS, runs **search-only** validation for 3 ODs, then explicitly switches back |
 | 5 | **Rail passes searchability** | Confirms the Interrail Global Pass ("Europe"), Swiss Travel Pass ("Switzerland") and BritRail ("United Kingdom") return real products |
-| 6 | **API searchability (bot-proof)** | Calls the LocoHub search API directly on **Staging and Production** — no browser, so anti-bot walls don't apply. Runs **in parallel** with the browser suite. Self-heals transient timeouts with an automatic re-check |
+| 6 | **API searchability (bot-proof)** | Calls the LocoHub search API directly on **Production only** (the staging check was taken out on 2026-10-28) — no browser, so anti-bot walls don't apply. Runs **in parallel** with the browser suite. Self-heals transient timeouts with an automatic re-check |
 | 7 | **Manager deck** | `Rail-Europe-MSC-Automation-Overview.pptx` auto-refreshes its "Proof" slide from the latest run |
 | 8 | **Weekly report** | Every run is logged; `npm run weekly` compiles the week into `weekly-report.md` |
 
@@ -149,24 +148,26 @@ Override with `MSC_MAX_ITEMS_PER_ORDER` if the portal's limit changes.
    npm install
    npx playwright install chromium
    ```
-3. **Capture your own B2B login** (opens a real browser — you sign in manually with
-   *your own* Rail Europe credentials; the password is never typed into or stored by
-   any script):
+3. **Log in — all in the command window, no browser window** (since 2026-10-27):
    ```bash
-   npm run auth
+   npm run auth        # the same command as: npm run auth:all
    ```
-   Saves `storageState.json` locally. **This file is your live login session —
-   never share it, never commit it** (it's already git-ignored). Re-run `npm run auth`
-   whenever the session expires (roughly every few hours of inactivity).
+   It checks the 5 portals (B2B ROW, Key account ROW, Agents ROW, Key account China, Customer
+   care China — one account on all 5) and, if any login is expired, asks ONCE for your username
+   and password (hidden, kept in memory only, never saved) and signs them all in headless. It
+   then does AWS EU and AWS China the old way: your browser opens by itself and you click Allow.
+   is opened by the tool); you open the link, enter the code and click Allow. Sessions live
+   about 24 hours. B2B is saved to `storageState.json` and the 4 other portals to `auth/<key>.json`.
+   **These files are your live login sessions — never share them, never commit them**
+   (git-ignored). Options after `--`: `--aws` (AWS only), `--portals` (portals only), `--all`
+   (everything again). Browser fallbacks, where you type in the portal yourself:
+   `npm run auth:b2b`, `npm run auth:portals`.
 
-   This also opens your browser first for **AWS SSO** (`aws sso login --sso-session era`)
-   — needed only for the Group Bookings-Salesforce Sync mail item. Skipping or cancelling
-   that step is fine; it never blocks the B2B login below it, and that item just reads
-   `[check manually]` until it's done. Its session expires on its own separate schedule
-   (there's no override for how long — see "Also needs a live login" further down), so
-   expect to redo just that part more often than the B2B login. To refresh only one side
-   without the other: `npm run auth:b2b` does just the B2B browser login (skips AWS
-   entirely), and running `aws sso login --sso-session era` directly does just AWS.
+   AWS SSO is needed only for the Group Bookings-Salesforce Sync and Dropfile mail items.
+   Skipping it is fine; those items then read `[check manually]`. Its session expires on its
+   own separate schedule (see "Also needs a live login" further down). AWS signs in through
+   the company page, so it cannot take a typed password. You can also run it directly:
+   opens your browser, still works: `aws sso login --sso-session era`.
 4. **(Optional) Point at your own Postman exports**, only needed for the API check
    (`npm run api` / check #6). Set an environment variable to your own exported
    Postman environment folder:
@@ -189,17 +190,18 @@ that person's permissions can do.
 ## Daily commands
 
 ```bash
-npm run sanity   # EVERYTHING: connectivity + coverage guard + SNCF POS + 19 sectors + 3 passes + API + deck + log
+npm run sanity   # EVERYTHING: SNCF POS + 19 sectors + 3 passes + 4 portal checks + API (production) + extras + deck + log
 npm run booking  # JUST the cart/booking references (fastest path to a K-number)
-npm run msc      # connectivity + SNCF POS + booking references (no API, no deck)
+npm run msc      # SNCF POS + booking references (no API, no deck)
 npm run passes   # rail pass searchability only (Interrail + Swiss + BritRail)
-npm run api      # read-only API searchability, staging + production
+npm run api      # read-only API searchability, production
 npm run deck     # rebuild the manager PowerPoint from the latest report (close the .pptx first if open)
 npm run weekly   # compile run-history.jsonl into weekly-report.md
 npm run report   # open the Playwright HTML report
-npm run auth     # AWS SSO (era) then the B2B login capture — re-do when a session expires
-npm run auth:b2b # just the B2B login capture, skips AWS SSO
-npm run auth:portals    # the 4 other portals' saved logins — a window opens only for the expired ones
+npm run auth     # portals in cmd (one password) + AWS EU + China (browser opens, click Allow) — same as auth:all
+npm run auth:all # same; options after --: --aws, --portals, --all
+npm run auth:b2b # B2B login capture in a browser window (fallback)
+npm run auth:portals    # the 4 other portals' saved logins in browser windows (fallback)
 npm run china-full      # OPT-IN: full 22-item booking on customer care China (~9 min, on its own)
 npm run verify-routes   # check every route in data/journeys.js is typeable in the portal
 node check-login.js     # ~10s: is the saved session still valid? run this BEFORE a long run
@@ -213,7 +215,6 @@ Handy env vars (set them in the same window before the command):
 | `MSC_MAX_SECTORS=4` | test on the first 4 sectors only (a partial run is never offered as "Sanity done") |
 | `MSC_DAYS_AHEAD`, `MSC_MAX_ITEMS_PER_ORDER` | travel date offset (default 45 days) / items per order (default 15) |
 | `HEADED=1` | watch the browser |
-| `LH_ONLY=production` (or `staging`) | API check on one environment only |
 | `MSC_NO_DM=1` (or `MSC_NO_SLACK=1`) | do not send the result DM |
 | `MSC_NO_MAIL=1` | do not open the Outlook draft (it is still saved in `report/`) |
 | `MSC_SLOT=HH:MM` | force the slot time shown in the DM and the mail |
@@ -224,8 +225,8 @@ Handy env vars (set them in the same window before the command):
 | `DAYS` | `npm run weekly` only: how many days back (default 7) |
 
 **Fully standalone (no AI assistant needed):** `npm run sanity` prints a human-readable
-summary at the end — booking references, per-check table, sector list grouped by outcome,
-connectivity flags with affected routes, coverage gaps, and API detail. Two
+summary at the end — booking references, per-check table, sector list grouped by outcome
+and API detail (production). Two
 double-clickable PowerShell scripts wrap the common commands so you never have to
 remember the Node PATH setup. They find Node on whoever's machine they run on: the `node`
 already on PATH, else a portable Node in your own profile
@@ -241,9 +242,9 @@ If PowerShell refuses to run them: `powershell -ExecutionPolicy Bypass -File .\r
 Keep both files ASCII-only (Windows PowerShell 5.1 reads them as ANSI).
 
 Reports land in `report/` (gitignored — regenerated every run):
-- `msc-b2b.json` — connectivity rows, coverage, SNCF POS results, booking references, per-item status
+- `msc-b2b.json` — SNCF POS results, booking references, per-item status
 - `msc-passes.json` — pass search results
-- `api-searchability.json` / `msc-api-searchability.md` — API results, both environments
+- `api-searchability.json` / `msc-api-searchability.md` — API results (production)
 - `carrier-discovery.json` — output of the discovery tool
 
 `run-history.jsonl` accumulates one line per `npm run sanity` run — this is what
@@ -300,7 +301,7 @@ The rest is plain text:
 🟢 Sanity OK - 22:00 IST · took 6.2 min           (or 🔴 Sanity KO - 2 checks failed …)
 👉 NEEDS YOU                     each KO line with its reason (only when something failed)
 👉 CHECK YOURSELF BEFORE SENDING THE MAIL     the [check manually] items, with why
-✅ RESULT (same as the mail)     the 11 points
+✅ RESULT (same as the mail)     the 10 points
 📋 For the team channel, if you want to post it:
 Sanity done 22:00 IST- K070439139, K442252781
 📧 Mail draft is open in Outlook: click in the body, Ctrl+V, review, Send.
@@ -349,7 +350,7 @@ VLK5CY, +1.3 min. It holds one real seat per run, so it stays off until you deci
 part of the probe is not working yet (traveler form timeout).
 
 **Booking refs are on the line of the portal that made them, not in the subject:** point 1
-`OK (Booking ref: K…, K…)` for customer care ROW, point 7 `OK (Booking ref: K…)` for China.
+`OK (Booking ref: K…, K…)` for customer care ROW, point 6 `OK (Booking ref: Z…)` for China.
 `npm run auth:portals` only opens a window for the accounts whose login has expired.
 
 ### The sanity mail (never sent automatically)
@@ -358,8 +359,9 @@ The run builds the full mail from its own results, then:
 
 1. copies it to the clipboard **formatted**, with the numbered list and links
 2. opens a new **Outlook compose window** with the subject filled in, e.g.
-   `B2B & B2C Sanity Check - OK [20/10/2026; 09:00 IST]` (no booking refs in the subject — they
-   sit on point 1 and point 7)
+   `B2B & B2C Sanity Check - OK [28/10/2026; 13:00 IST]` (no booking refs in the subject — they
+   sit on point 1 and point 6). The mail has **10 points** since 2026-10-28 (the connectivity
+   point was removed; the rest moved up one)
 
 Click in the body, press **Ctrl+V**, review, press **Send**. It is never sent for you: it goes
 to a distribution list and includes judgement calls, so a person presses Send.
@@ -367,15 +369,16 @@ to a distribution list and includes judgement calls, so a person presses Send.
 Honesty rules built into the draft:
 
 - Anything the run did **not** verify is written as **`[check manually]`**, never as OK. The
-  one deliberate exception is point 11 (SF cases): it shows a plain `0` placeholder until the
+  one deliberate exception is point 10 (SF cases): it shows a plain `0` placeholder until the
   Salesforce CLI is approved, and is always listed under "still to check" so it is counted by
   hand.
 - The subject says `KO` if any automated item failed.
-- Connectivity carriers flagged >15 min are listed under item 2 **for your review** rather
-  than turning it into KO — whether they matter is the team's call, not the script's.
+- Carrier connectivity (the health-center page) is **not part of the sanity at all** any more
+  (not read, not mailed), and a dropped carrier (e.g. RegioJet) does not turn a line KO by
+  itself: read the run summary for dropped sectors.
 - The subject also flips to `KO` if the booking suite itself didn't reach Traveler Details
   and capture a reference per order — not shown as its own numbered point (kept to the
-  standard 11), but checked silently via the same gate that withholds the "Sanity done" line in the DM
+  standard 10), but checked silently via the same gate that withholds the "Sanity done" line in the DM
   (`bookingIssues()` in notify.js). Added 2026-09-30 after a run where the browser suite
   timed out with zero booking references (a real portal-side "not enough seats" error) while
   every other item still read OK, so the subject alone would have said OK with nothing to
@@ -406,9 +409,9 @@ sf org login web --alias re-prod
 with `OAUTH_APPROVAL_ERROR_GENERIC`. OAuth itself works in the org (admin-installed apps such as
 *Atlassian Links* log in fine), so the refusal is specific to the Salesforce CLI app — a
 Salesforce admin has to approve it for the user's profile. Retrying the login will not help.
-Until then item 11 shows the `0` placeholder (counted by hand); nothing else is affected.
+Until then item 10 shows the `0` placeholder (counted by hand); nothing else is affected.
 
-Once approved, item 11 fills itself in. It reads the *Technical HD view* list view directly, so it
+Once approved, item 10 fills itself in. It reads the *Technical HD view* list view directly, so it
 always matches what you see in Salesforce. **Deciding whether a case needs an SR stays with
 you** — the run counts and lists the cases, it does not judge them. If the login lapses the
 item goes back to `[check manually]` with the command to re-run.
@@ -448,11 +451,10 @@ The step breakdown below is older (2026-09-12 22:00 run, 19/19 sectors, 2 bookin
 
 | Step | Time |
 |---|---|
-| Pre-flight connectivity | ~14s |
 | SNCF Connect POS (3 ODs) | ~1m 33s |
 | Build carts + booking references (22 items) | ~3m 16s |
 | Pass searchability (3 destinations) | ~16s |
-| API check (staging + production) | runs **in parallel** — adds nothing |
+| API check (production) | runs **in parallel** — adds nothing |
 | **Total** | **~5m 30s** |
 
 Deepening the fallback chains from 55 to 101 routes cost nothing: alternates are only
@@ -474,8 +476,8 @@ Two separate things got us here from ~8.5 min:
 
 ### Why not more workers?
 
-Only ~13s of the run is parallelisable (the connectivity read and the four pass
-searches). The two checks that own ~98% of the time both mutate state everything else
+Only ~13s of the run is parallelisable (the pass searches; the connectivity read that used to
+be part of it was removed on 2026-10-28). The two checks that own ~98% of the time both mutate state everything else
 depends on — the POS check changes the point of sale **account-wide**, and the booking
 test owns the **single shared cart**. A run at Playwright's default worker count proved
 the damage: `results.json` showed worker 0 switching POS at 06:41:10 while worker 1 was
@@ -664,7 +666,7 @@ LH_ONLY=production npm run api        # the ODs still return products
 - ✅ The API layer only searches — never books
 - ✅ No booking reference is reported if any item in that order shows as expired
 - ✅ Login credentials are never typed into, stored by, or logged by any script
-- ✅ Connectivity issues are **flagged for manual review only** — nothing is auto-sent
+- ✅ Carrier problems are **for manual review only** (no longer a mail point) — nothing is auto-sent
   to Teams, email, or a ticketing system
 - ✅ The **sanity mail is never sent automatically** — it opens as a draft for a person to
   review and send. Nothing is posted to a team channel: the only automatic message is the
@@ -697,7 +699,7 @@ tools/discover-carriers.js     read-only carrier↔route discovery (not part of 
 tools/verify-station-labels.js read-only check that every route in data/journeys.js can be
                                typed into the portal autocomplete AND lands in the right
                                country — `npm run verify-routes`
-api-searchability.js       read-only LocoHub API check, staging + production
+api-searchability.js       read-only LocoHub API check, production only (staging removed 2026-10-28)
 extra-checks.js            Primer, AppFlow (Group Bookings–SF sync), 4 portal checks, dropfile, SF cases — in parallel
 notify.js                  end of run: the sanity mail draft (never auto-sent) + result DM to you via Pratikesh Assistant
 .env.example               template for .env (mail To:, SF alias, optional DM webhook) — .env itself is git-ignored
@@ -790,7 +792,8 @@ journey id, then run both gates.
 
 ## Environment inventory gaps (declared, not failures)
 
-Staging carries **no Swiss domestic and no French regional inventory**. Verified with controls:
+*Historical — the staging API check was removed on 2026-10-28; the `apiSkipEnvs` markers in
+`data/journeys.js` have no effect now.* Staging carried **no Swiss domestic and no French regional inventory**. Verified with controls:
 Zurich→Bern, Geneva→Zurich, Basel→Zurich, Chur→Tirano and Zermatt→Chur all return 0 products on
 staging while Geneva→Paris (international) passes; Paris→Rouen and Lyon→Grenoble return 0 while
 Paris→Bordeaux (TGV) returns 9. Production returns results for all of them.

@@ -8,8 +8,7 @@
 // Tokens/endpoints are read AT RUNTIME from the user's Postman environment files
 // (gitignored). No secret is ever copied into this repo.
 //
-// Run:  node api-searchability.js                 (staging + production)
-//       LH_ONLY=staging node api-searchability.js (one env)
+// Run:  node api-searchability.js                 (production)
 // ============================================================================
 const fs = require('fs');
 const path = require('path');
@@ -19,21 +18,22 @@ require('./lib/env').loadEnv();   // POSTMAN_DIR from .env
 // exported Postman environment folder. Otherwise the first of these that exists is used — the
 // OneDrive folder was reorganised once already (Notes\Training\Postman json files ->
 // Training Material\Postman Collections), and the old path silently skipped both envs, so the
-// mail showed B2C as [check manually] with no error anywhere.
+// mail showed B2C as [check manually] with no error anywhere. The old Notes\ tree no longer
+// exists (removed in a Desktop cleanup), so its fallback was dropped on 2026-10-27.
 // Built from the CURRENT user's own profile folder (not one person's name), so the same lookup
 // works on every teammate's machine that has the company OneDrive.
 const HOME_ONEDRIVE = path.join(require('os').homedir(), 'OneDrive - RAILEUROPE', 'Desktop');
 const POSTMAN_DIR_CANDIDATES = [
   path.join(HOME_ONEDRIVE, 'Training Material', 'Postman Collections', 'LH'),
-  path.join(HOME_ONEDRIVE, 'Notes', 'Training', 'Postman json files', 'LH'),
 ];
 const POSTMAN_DIR = process.env.POSTMAN_DIR
   || POSTMAN_DIR_CANDIDATES.find((d) => fs.existsSync(d))
   || POSTMAN_DIR_CANDIDATES[0];
 
-// Which Postman env files to drive. Staging = validate; Production = real MSC signal.
+// Which Postman env files to drive: PRODUCTION only. The LocoHub STAGING check was taken out of
+// the sanity on 2026-10-28 (Pratikesh's call: it is not part of the sanity run). It is gone from
+// the run, the mail, the summary and the history; the staging Postman file is not read at all.
 const ENVS = [
-  { label: 'STAGING',    file: path.join(POSTMAN_DIR, 'LocoHub_Staging (ROW_B2B).postman_environment 4.json') },
   // ROW_B2B (env 4) uses SSM (no literal token). ROW_B2B2C carries a literal token on the real
   // production endpoint, so it's the one that yields a live production searchability signal.
   { label: 'PRODUCTION', file: path.join(POSTMAN_DIR, 'LocoHub_Production (ROW_B2B2C).postman_environment 2.json') },

@@ -38,7 +38,7 @@ function startBackground(cmd) {
   const extrasPromise = startBackground('node extra-checks.js');
   const b2b = run('npx playwright test --project=b2b');
 
-  console.log('\n=== 2/5 · API searchability (all ODs · staging + production) ===\n');
+  console.log('\n=== 2/5 · API searchability (all ODs · production) ===\n');
   const apiRes = await apiPromise;
   process.stdout.write(apiRes.out);
   const api = apiRes.code;
@@ -53,7 +53,7 @@ function startBackground(cmd) {
   console.log('\n=== 5/5 · Log this run to run-history.jsonl (for the weekly report) ===\n');
   run('node log-run.js'); // always logs — even a failed/partial run — so the weekly report stays complete
 
-  // Human-readable summary (booking refs, per-check table, sectors, connectivity flags, API
+  // Human-readable summary (booking refs, per-check table, sectors, API
   // detail) — the same breakdown given in chat, so this is useful standalone too.
   run('node print-summary.js');
 

@@ -1,12 +1,14 @@
 {
-  "name": "raileurope-msc-automation",
+  "name": "raileurope-asc-automation",
   "version": "1.0.0",
-  "description": "Automated daily Manual Sanity Check (MSC) for Rail Europe B2B using Playwright. Covers every carrier on the connectivity page (19 point-to-point sectors + 3 rail passes) across batched orders, plus SNCF Connect POS and read-only LocoHub API checks. Never pays, never submits to a carrier.",
+  "description": "Automated daily Sanity Check (ASC, formerly MSC) for Rail Europe B2B using Playwright. Covers every carrier on the connectivity page (19 point-to-point sectors + 3 rail passes) across batched orders, plus SNCF Connect POS and read-only LocoHub API checks. Never pays, never submits to a carrier.",
   "scripts": {
     "auth": "node auth.js",
     "auth:b2b": "playwright test --project=setup --headed",
     "auth:portals": "node auth-portals.js",
+    "auth:all": "node auth-all.js",
     "china-full": "node china-full.js",
+    "asc": "playwright test --project=b2b tests/b2b-msc.spec.js",
     "msc": "playwright test --project=b2b tests/b2b-msc.spec.js",
     "passes": "playwright test --project=b2b tests/b2b-passes.spec.js",
     "booking": "playwright test --project=b2b tests/b2b-msc.spec.js -g \"build cart\"",

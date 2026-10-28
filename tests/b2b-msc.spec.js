@@ -1,8 +1,8 @@
 // B2B Manual Sanity Check.
-//   1) Pre-flight: read the connectivity (health-center) page and record carrier status.
-//   2) SNCF Connect POS test: switch POS to 832072551, search-only validation for 3 ODs, switch back.
-//   3) Build one shared cart across the healthy PTP journeys and capture ONE booking reference,
+//   1) SNCF Connect POS test: switch POS to 832072551, search-only validation for 3 ODs, switch back.
+//   2) Build the shared carts (19 sectors + 3 passes) and capture a booking reference per order,
 //      asserting that NO sector is expired at capture time. Stops at Traveler details. NEVER pays.
+//   (The carrier-connectivity page read was removed from the sanity on 2026-10-28.)
 //
 // Reuses the saved login (storageState.json). Run `npm run auth` first if it doesn't exist.
 
@@ -84,54 +84,13 @@ test.beforeEach(async ({ context }) => { if (!(PORTAL && PORTAL.china)) await H.
 test.afterEach(persist);   // flush as we go, so a worker swap can't lose completed work
 test.afterAll(persist);
 
-test('Pre-flight: connectivity status', async ({ page }) => {
-  await page.goto('/health-center');
-  await H.dismissCookies(page);
-  await page.getByText(/Systems connectivity status/i).waitFor({ timeout: 30000 });
-  // Carrier cards load asynchronously (skeleton placeholders first) — wait for real status text.
-  await page.getByText(/\b(is up|has been unstable|is unknown|is down)\b/i).first().waitFor({ timeout: 30000 });
-  const body = await page.locator('body').innerText();
-  // Section-aware parse: the page groups carriers under "Point-to-point / Passes / Services
-  // inventories", and TRENITALIA and SBB appear in TWO sections with independent statuses.
-  const connRows = H.parseConnectivity(body);
-  report.connectivityRows = connRows;                      // {section, carrier, status}
-  report.connectivity = connRows.map((r) => `${r.carrier} ${r.status}`);   // legacy flat view
-  console.log('[connectivity]', report.connectivity.join(' | '));
-
-  // Coverage guard: every carrier on the page must be booked, passed, knowingly excluded, or
-  // explicitly pending an OD. Without this the suite drifts silently as carriers are added —
-  // which is how a third of the estate ended up untested.
-  const cov = H.coverageGaps(connRows, data);
-  report.coverage = cov;
-  console.log(`[coverage] covered ${cov.covered.length} | excluded ${cov.excluded.length} (${cov.excluded.join(', ') || '-'}) | pending ${cov.pending.length} (${cov.pending.join(', ') || '-'}) | UNMAPPED ${cov.unmapped.length}`);
-  if (cov.unmapped.length) {
-    report.issues.push({ type: 'unmapped-carriers', detail: cov.unmapped });
-    console.log(`⚠️  UNMAPPED CARRIERS (on the connectivity page but tested nowhere): ${cov.unmapped.join(', ')}`);
-  }
-
-  // MSC checklist #1: flag any carrier RED/unstable/down for > 15 min for manual cross-check.
-  const { escalate, watch } = H.flagConnectivity(report.connectivity, 15);
-  escalate.forEach((e) => { e.affectedODs = H.affectedODs(e.carrier, data.ptpJourneys); });
-  report.connectivityEscalations = escalate;
-  report.connectivityWatch = watch;
-  if (escalate.length) {
-    report.issues.push({ type: 'connectivity-flag', detail: escalate });
-    // NOTE: this only FLAGS to the console/report. Nothing is sent anywhere — no Teams, no email,
-    // no ticket. Actually escalating is a manual human step (per SOP rule #1).
-    console.log('\n⚠️  CONNECTIVITY FLAG — carriers RED/unstable > 15 min (SOP rule #1). Nothing is auto-sent; these need MANUAL review:');
-    for (const e of escalate) {
-      const dur = e.minutes != null ? `~${e.minutes} min` : 'duration not stated';
-      const ods = e.affectedODs.length ? ` | our ODs: ${e.affectedODs.join(', ')}` : '';
-      console.log(`   - ${e.carrier}: ${e.status} (${dur})${ods}`);
-    }
-    console.log('   SUGGESTED MANUAL STEPS: cross-check offers/products for the affected OD(s); compare on Trainline');
-    console.log('           (https://thetrainline.com) to isolate ERA vs carrier; if confirmed, follow');
-    console.log('           Critical Incident Management: https://wiki.vsct.fr/display/SR/Critical+Incident+Management');
-  }
-  if (watch.length) console.log('[watch <=15min / unknown]', watch.map((w) => `${w.carrier}:${w.status}${w.minutes != null ? '(' + w.minutes + 'm)' : ''}`).join(', '));
-
-  expect(report.connectivity.length).toBeGreaterThan(0);
-});
+// The "Pre-flight: connectivity status" test (health-center page read, coverage guard, RED/unstable
+// > 15 min flag) was REMOVED from the sanity run on 2026-10-28 at Pratikesh's request: it is not
+// part of the sanity run, it printed a lot of noise and fed a mail point that read KO. Nothing
+// reads or reports the connectivity page any more. Consequences, accepted: carriers that are
+// already down are no longer built last or labelled EXPECTED (they just show as dropped sectors),
+// and a new unmapped carrier is no longer noticed. Helpers (H.parseConnectivity, H.coverageGaps,
+// H.flagConnectivity) stay in lib/helpers.js unused, in case it is ever wanted back.
 
 test('SNCF Connect POS: search-only validation', async ({ page }) => {
   await page.goto('/home');
@@ -261,6 +220,8 @@ test('B2B: build carts and capture booking references (none expired)', async ({ 
   // MSC_MAX_SECTORS lets us validate the flow on a small subset (e.g. 2) before the full set.
   let journeys = data.ptpJourneys.slice(0, Number(process.env.MSC_MAX_SECTORS || data.ptpJourneys.length));
 
+  // NOTE (2026-10-28): the connectivity pre-flight no longer exists, so `escalations` below is
+  // always empty and no carrier is deferred or labelled EXPECTED; this block is kept dormant.
   // Carriers the pre-flight already flagged as RED/unstable. Their sectors are STILL tested —
   // an outage should be confirmed, not assumed — but a resulting failure is reported as
   // expected rather than as a regression, and they are ordered last so a known-bad carrier

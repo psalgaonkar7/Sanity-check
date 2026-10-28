@@ -6,13 +6,24 @@ Folder: C:\Claude\RE\ASC     Repo: github.com/psalgaonkar7/Sanity-check
  - It never pays. It stops at Traveler Details and captures booking refs (K + 9 digits;
    the China booking ref starts with Z).
  - Open CMD and always start with:   cd C:\Claude\RE\ASC
+ - While the Pratikesh Assistant runs LIVE, it owns sanity (since 2026-10-26): it runs
+   "npm run sanity" here by itself at the round hours, ready BY the hour (starts 10 min
+   before, e.g. 07:50 for the 08:00 slot, then every 2h), in its own "ASC sanity" window;
+   the mail and DM say the round hour. Don't start one by hand then - use the dashboard's
+   "Run sanity now" button (http://localhost:4546) instead.
+   See RE\Assistant\CMD-cheatsheet.txt.
 
 1. DAILY ROUTINE
- a) Log in (about once a day; opens browser for AWS SSO, then B2B portal):
+ a) Log in (about once a day, all in cmd, no browser window opened by the tool):
       cd C:\Claude\RE\ASC
       npm run auth
-    - AWS SSO step can be skipped/cancelled. Then the Group Bookings-Salesforce Sync
-      and Dropfile sanity check items read [check manually].
+    (the same command as  npm run auth:all) It signs in only what is expired:
+    - the 5 portals (B2B ROW, Key account ROW, Agents ROW, Key account China, Customer care
+      China) with ONE username + password typed here (hidden, never saved);
+    - AWS EU, then AWS China: your browser opens by itself (old style): click Allow there.
+      (AWS signs in through the company page, so no password is typed here for it.)
+    - Skipping AWS makes the Group Bookings-Salesforce Sync and Dropfile sanity check items
+      read [check manually].
     - One AWS login (sso-session "era") covers both AWS profiles the sanity run uses:
       era-prod (AppFlow) and ariane-prod (dropfile).
  b) Run the sanity check (about 7 min; up to ~14 min on days a carrier's search times out):
@@ -23,23 +34,24 @@ Folder: C:\Claude\RE\ASC     Repo: github.com/psalgaonkar7/Sanity-check
       Assistant chat). Nothing is posted to the team channel any more. For a complete run the
       DM holds the "Sanity done HH:MM IST- K..." line, ready to paste in the team channel.
       A KO run is DMed too, with the reason (and says not to post "Sanity done").
-    - The mail ends with the Sanity Tracker link. Points 4-7 (key account ROW, agents ROW,
+    - The mail ends with the Sanity Tracker link. Points 3-6 (key account ROW, agents ROW,
       key account China, customer care China) are OK only after a logged-in search worked.
       Customer care China also books 1 train (stops at Traveler Details, never pays).
-    - Booking refs are NOT in the subject: point 1 has the customer care ROW refs, point 7 the
+    - Booking refs are NOT in the subject: point 1 has the customer care ROW refs, point 6 the
       China ref, e.g.  "Customer care china working :- OK (Booking ref: K123456789)".
       If one says [check manually] its saved login expired: run  npm run auth:portals
     - Paste the email body (Ctrl+V), review, press Send yourself.
-    - The mail has 11 points, each OK, KO or [check manually]:
-        1 B2C & B2B check (customer care ROW booking refs)   2 B2B connectivity
-        3 Group Bookings-Salesforce Sync   4 Key account ROW   5 Agents portal ROW
-        6 Key account China   7 Customer care China (China booking ref, Z...)   8 SNCF
-        9 Primer   10 Dropfile sanity check   11 SF cases (shows 0 until Salesforce is approved)
+    - The mail has 10 points, each OK, KO or [check manually]  (the "B2B System Connectivity
+      Status" point was removed on 2026-10-28, so everything after point 1 moved up by one):
+        1 B2C & B2B check (customer care ROW booking refs)   2 Group Bookings-Salesforce Sync
+        3 Key account ROW   4 Agents portal ROW   5 Key account China
+        6 Customer care China (China booking ref, Z...)   7 SNCF   8 Primer
+        9 Dropfile sanity check   10 SF cases (shows 0 until Salesforce is approved)
  c) By hand each run (the tool cannot do these):
       - Slack #ariane-alerts-prod: any failed Glue job? If yes raise a Jira SR for the
         third-party team. (Procedure: Confluence SR page 2223472642; recording in
         #team-application-support)
-      - SF case count (point 11)
+      - SF case count (point 10)
       - Any carrier listed as DROPPED in the run's summary (e.g. RegioJet): the mail line
         does not turn KO for that on its own, so look at it yourself
 
@@ -50,25 +62,38 @@ Folder: C:\Claude\RE\ASC     Repo: github.com/psalgaonkar7/Sanity-check
     Test which Node they would use:  powershell -ExecutionPolicy Bypass -File .\run-sanity.ps1 -CheckOnly
 
 3. LOGIN PROBLEMS
+ - EASIEST, everything in cmd: all 5 portals (B2B ROW, Key account ROW, Agents ROW, Key account
+   China, Customer care China) with ONE username + password typed here (hidden, never saved,
+   no browser window) AND AWS EU + China (browser opens, you click Allow); only
+   what is expired. The Assistant runs this at YES.
+      npm run auth:all               (same as npm run auth)
+      npm run auth:all -- --aws      only AWS (EU, then China)
+      npm run auth:all -- --portals  only the 5 portals
+      npm run auth:all -- --all      sign in to everything again
+      node auth-all.js --check       read-only: which of the 4 portals (not B2B) have an expired
+                                     saved login; asks nothing, signs in nothing (the Assistant uses it)
  - Every check times out / looks broken everywhere = B2B session expired:
       node check-login.js            (about 10 sec, run this before blaming the code)
- - Re-login B2B only (skip AWS):
-      npm run auth:b2b
- - A portal line (points 4-7) says [check manually] = that portal's saved login expired.
+ - Browser fallbacks (a window opens, you type in the portal yourself):
+      npm run auth:b2b               B2B only
+ - A portal line (points 3-6) says [check manually] = that portal's saved login expired.
    Save it again (a window opens only for the expired ones; you sign in yourself):
       npm run auth:portals
- - AWS SSO only:
+ - AWS SSO the old way (opens your browser):
       aws sso login --sso-session era
 
 4. RUN PARTS ON THEIR OWN
-      npm run msc          browser: connectivity + SNCF POS + all sectors
+   (About the name: this tool was "MSC" before it became ASC on 2026-10-01. Some internal names
+    still say msc - the MSC_... settings below and report\msc-*.json - because the code reads
+    them under those names; renaming them would break the runs. They mean ASC.)
+      npm run asc          browser: SNCF POS + all sectors (old name: npm run msc)
       npm run passes       3 pass searches (search only)
       npm run booking      only the cart-build / booking-reference test
       npm run china-full   FULL 22-item booking on customer care China (~9 min, on its own,
                            never pays; the normal sanity books just 1 China train)
       set MSC_PAYMENT_PROBE=1   opt-in: also take ONE item to the Hold & Payment page (never
                            pays, but holds a real seat at the carrier) - leave off normally
-      npm run api          LocoHub API check, staging + production (read only)
+      npm run api          LocoHub API check, production (read only)
       node extra-checks.js Primer, AppFlow, 4 portal searches + 1 China booking, Dropfile, SF cases
       npm run deck         rebuild the manager deck (.pptx)
       npm run weekly       weekly summary of the last 7 days (weekly-report.md)
@@ -83,7 +108,6 @@ Folder: C:\Claude\RE\ASC     Repo: github.com/psalgaonkar7/Sanity-check
       set MSC_SLOT=14:00     force the slot time in the DM / mail
       set MSC_MAX_SECTORS=4  test with only 4 sectors (partial runs are never announced)
       set HEADED=1           watch the browser
-      set LH_ONLY=production API check on production only
       (clear one with e.g.:  set MSC_NO_DM=)
 
 5b. DROPFILE (Ariane Glue job tf-ariane-prod-transactions-sanity-check, runs daily ~14:00 IST)
@@ -117,10 +141,13 @@ Folder: C:\Claude\RE\ASC     Repo: github.com/psalgaonkar7/Sanity-check
  - Mail subject: OK / KO. KO = an automated item failed OR the booking suite did not
    capture a booking ref.
  - "[check manually]" = the run could not verify it (login expired, tool not set up).
- - Connectivity carriers flagged >15 min are listed for your review. Not a failure.
+ - The carrier-connectivity page and LocoHub staging are NOT part of the sanity any more
+   (removed 2026-10-28): no mail point, no KO from them.
  - A sector is only DROPPED/ERROR after the primary route AND all backup routes failed.
- - Cart order looks jumbled (#1,#3,#5... then #2,#4...): flagged carriers are built last
-   on purpose.
+   A dropped carrier (e.g. RegioJet) is in the run summary only: it does not turn a mail
+   line KO by itself, so look at it yourself.
+ - The run no longer reads the connectivity page, so the cart order is now simply the list
+   order (no carriers are moved to the end any more).
  - China KO with title "Loading | Rail Europe": portal slow to boot. Wait is now 120s.
    If you see it again, check the portal by hand and tell Claude.
  - Point 1 reads OK when B2B was proven by the booking run, even if the B2C API half could
@@ -132,7 +159,7 @@ Folder: C:\Claude\RE\ASC     Repo: github.com/psalgaonkar7/Sanity-check
    (or set POSTMAN_DIR).
 
 9. FILES WORTH KNOWING (in C:\Claude\RE\ASC)
-      report\msc-b2b.json            booking refs, sectors in cart, connectivity
+      report\msc-b2b.json            booking refs, sectors in cart, SNCF POS
       report\msc-extras.json         China / Primer / AppFlow / Dropfile results
       report\api-searchability.json  API results
       report\sanity-mail.txt         the last mail draft text

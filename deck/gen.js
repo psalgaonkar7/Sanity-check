@@ -13,13 +13,13 @@ const prodEnv = (apiRep.envs || []).find((e) => e.label === "PRODUCTION");
 // Scope counts come from the test data (and the connectivity read when available) so the
 // slides cannot go stale the way the previously-hardcoded "12 / 3 / 27" did.
 const journeys = (() => { try { return require("../data/journeys"); } catch { return {}; } })();
-const cov = b2b.coverage;
+// Carriers = the distinct carrier names the test data books (the connectivity page is no longer read).
+const bookedCarriers = new Set([...(journeys.ptpJourneys || []), ...(journeys.passesToAdd || [])]
+  .flatMap((j) => j.connectivityNames || []).map((n) => String(n).toUpperCase()));
 const SCOPE = {
   sectors: (journeys.ptpJourneys || []).length || "—",
   passes: (journeys.passesToAdd || []).length || "—",
-  carriers: cov
-    ? cov.covered.length + cov.excluded.length + cov.pending.length + cov.unmapped.length
-    : new Set((b2b.connectivityRows || []).map((r) => r.carrier)).size || "—",
+  carriers: bookedCarriers.size || "—",
 };
 
 const PROOF = {
@@ -37,7 +37,6 @@ const PROOF = {
     ? new Date(b2b.date).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })
     : "—",
   prodApi: prodEnv ? `${prodEnv.summary.pass} / ${prodEnv.rows.length}` : "—",
-  flags: Array.isArray(b2b.connectivityEscalations) && b2b.connectivityEscalations.length ? b2b.connectivityEscalations : null,
 };
 
 const pres = new pptxgen();
@@ -111,7 +110,7 @@ function stat(slide, x, y, w, big, small, color) {
   s.addShape(pres.shapes.LINE, { x: 8.35, y: 3.95, w: 4.05, h: 0, line: { color: "3A4570", width: 1 } });
   // Driven off the test data and the latest run, not hardcoded — these counts have already
   // changed more than once (12 -> 19 sectors, 3 -> 4 -> 3 passes) and stale slide numbers are worse than none.
-  [[String(SCOPE.sectors), "point-to-point sectors"], [String(SCOPE.passes), "rail-pass families"], [String(SCOPE.carriers), "carriers to watch"]].forEach((r, i) => {
+  [[String(SCOPE.sectors), "point-to-point sectors"], [String(SCOPE.passes), "rail-pass families"], [String(SCOPE.carriers), "carriers booked"]].forEach((r, i) => {
     s.addText([{ text: r[0], options: { bold: true, color: WHITE } }, { text: "   " + r[1], options: { color: "CAD2EA" } }], { x: 8.35, y: 4.15 + i * 0.47, w: 4.1, h: 0.4, fontFace: SANS, fontSize: 15, margin: 0 });
   });
   s.addText("Goal: reliable, fast, repeatable checks that remove human error.", { x: 8.35, y: 5.7, w: 4.1, h: 0.6, fontFace: SANS, fontSize: 12.5, italic: true, color: WHITE, margin: 0 });
@@ -129,7 +128,7 @@ function stat(slide, x, y, w, big, small, color) {
     { text: "Mirrors the real agent experience end-to-end", options: { bullet: true, breakLine: true } },
     { text: `Builds all  sectors +  passes into shared carts`, options: { bullet: true, breakLine: true } },
     { text: "Captures one booking reference — none expired", options: { bullet: true, breakLine: true } },
-    { text: "Connectivity flag, SNCF Connect POS & pass search", options: { bullet: true, breakLine: true } },
+    { text: "SNCF Connect POS & pass search", options: { bullet: true, breakLine: true } },
     { text: "Stops before payment", options: { bullet: true } },
   ], { x: 1.0, y: 3.05, w: 5.4, h: 2.6, fontFace: SANS, fontSize: 13.5, color: INK, paraSpaceAfter: 6, margin: 0 });
   card(s, 6.75, 1.85, 5.98, 4.05, WHITE);
@@ -138,7 +137,7 @@ function stat(slide, x, y, w, big, small, color) {
   s.addText("Direct to the search engine (LocoHub)", { x: 7.75, y: 2.55, w: 4.9, h: 0.35, fontFace: SANS, fontSize: 12.5, italic: true, color: MUTED, margin: 0 });
   s.addText([
     { text: "Fast and bot-proof — no website wall", options: { bullet: true, breakLine: true } },
-    { text: "Every sanity route on Staging and Production", options: { bullet: true, breakLine: true } },
+    { text: "Every sanity route on Production", options: { bullet: true, breakLine: true } },
     { text: "Production engine is shared with B2C", options: { bullet: true, breakLine: true } },
     { text: "Confirms results + sample fares per route", options: { bullet: true, breakLine: true } },
     { text: "Read-only — never books", options: { bullet: true } },
@@ -162,7 +161,7 @@ function stat(slide, x, y, w, big, small, color) {
     { text: ". Every automated step maps to a checklist item.", options: { color: INK } },
   ], { x: 0.6, y: 1.65, w: 12.1, h: 0.5, fontFace: SANS, fontSize: 14, margin: 0 });
   const items = [
-    "Connectivity status page", "All connectivity carriers — search to booking reference",
+    "All carriers — search to booking reference",
     "Salesforce – ERA sync (Groups)", "China portal login",
     "SNCF Connect key-account search", "Daily dropfile check",
   ];
@@ -188,8 +187,7 @@ function stat(slide, x, y, w, big, small, color) {
   const MAN = () => status("Manual", GREY_T, MUTED);
   const rows = [
     [H("Official checklist item"), H("Status"), H("Notes")],
-    [cell("Connectivity status  +  RED > 15 min rule"), AUTO(), cell("Flags for manual review (nothing auto-sent); maps the OD")],
-    [cell("All connectivity carriers — search to booking reference"), AUTO(), cell(` sectors +  passes → booking ref per order; stops at Traveler Details`)],
+    [cell("All carriers — search to booking reference"), AUTO(), cell(` sectors +  passes → booking ref per order; stops at Traveler Details`)],
     [cell("Passes — search + add-to-cart"), AUTO(), cell("Interrail / Swiss / BritRail — all searched AND in the booking")],
     [cell("SNCF Connect key-account search"), AUTO(), cell("POS 832072551 · search-only")],
     [cell("Salesforce – ERA sync (Groups)"), MAN(), cell("Needs AWS AppFlow access")],
@@ -198,51 +196,12 @@ function stat(slide, x, y, w, big, small, color) {
   ];
   s.addTable(rows, { x: 0.6, y: 1.7, w: 12.13, colW: [5.0, 2.0, 5.13], rowH: 0.47, border: { pt: 1, color: LINE }, align: "left", valign: "middle", margin: [3, 7, 3, 7] });
   s.addText([
-    { text: "4 of the SOP's core checks are fully automated", options: { bold: true, color: GREEN } },
+    { text: "3 of the SOP's core checks are fully automated", options: { bold: true, color: GREEN } },
     { text: "  ·  3 remain manual (need access).", options: { color: MUTED } },
   ], { x: 0.6, y: 6.95, w: 12, h: 0.35, fontFace: SANS, fontSize: 12.5, margin: 0 });
 })();
 
-// =================================================================== 6. SMART ESCALATION
-(() => {
-  const s = pres.addSlide();
-  header(s, "Built-in judgement", "Smart flagging — SOP rule #1");
-  s.addText("The SOP says: if a carrier is red for more than 15 minutes, cross-check and escalate. The automation encodes the detection — it flags loudly for manual review, but never auto-sends anything.", { x: 0.6, y: 1.62, w: 12.1, h: 0.55, fontFace: SANS, fontSize: 14, color: INK, margin: 0 });
-  const steps = [
-    ["Detect", "Reads live carrier status and measures how long each has been unstable or down."],
-    ["Judge", "Anything over 15 minutes is flagged; short blips and “unknown” go on a watch-list."],
-    ["Guide", "Names the affected route and prints the next steps — Trainline cross-check, then Critical Incident."],
-  ];
-  let y = 2.35;
-  steps.forEach((st, i) => {
-    card(s, 0.6, y, 6.5, 1.15, WHITE);
-    badge(s, 0.85, y + 0.33, 0.5, String(i + 1), RED);
-    s.addText(st[0], { x: 1.55, y: y + 0.17, w: 5.3, h: 0.35, fontFace: SANS, fontSize: 16, bold: true, color: INK, margin: 0 });
-    s.addText(st[1], { x: 1.55, y: y + 0.52, w: 5.35, h: 0.55, fontFace: SANS, fontSize: 12, color: MUTED, margin: 0 });
-    y += 1.32;
-  });
-  // worked example
-  card(s, 7.4, 2.35, 5.33, 3.79, INK);
-  s.addText("EXAMPLE — LIVE RUN", { x: 7.7, y: 2.6, w: 4.7, h: 0.3, fontFace: SANS, fontSize: 11.5, bold: true, color: "9AA3C0", charSpacing: 2, margin: 0 });
-  s.addText([
-    { text: "SBB", options: { bold: true, color: WHITE } },
-    { text: "  unstable for ", options: { color: "CAD2EA" } },
-    { text: "~2 hours", options: { bold: true, color: WHITE } },
-  ], { x: 7.7, y: 3.0, w: 4.7, h: 0.4, fontFace: SANS, fontSize: 17, margin: 0 });
-  s.addText("↓", { x: 7.7, y: 3.45, w: 4.7, h: 0.3, fontFace: SANS, fontSize: 16, bold: true, color: RED, margin: 0 });
-  s.addText([
-    { text: "Flagged", options: { bold: true, color: WHITE } },
-    { text: "  ·  affected route:  ", options: { color: "CAD2EA" } },
-    { text: "Zermatt → Chur", options: { bold: true, color: WHITE } },
-  ], { x: 7.7, y: 3.75, w: 4.7, h: 0.4, fontFace: SANS, fontSize: 14, margin: 0 });
-  s.addText([
-    { text: "Next steps printed automatically:", options: { color: "9AA3C0", breakLine: true, italic: true } },
-    { text: "Cross-check the offer on Trainline", options: { color: WHITE, bullet: true, breakLine: true } },
-    { text: "Isolate ERA vs carrier", options: { color: WHITE, bullet: true, breakLine: true } },
-    { text: "If confirmed → Critical Incident Mgmt", options: { color: WHITE, bullet: true } },
-  ], { x: 7.7, y: 4.25, w: 4.75, h: 1.7, fontFace: SANS, fontSize: 12.5, paraSpaceAfter: 5, margin: 0 });
-  s.addText("Flags for MANUAL review — nothing is sent to Teams / email / tickets, and a carrier-side issue never fails the run.", { x: 0.6, y: 6.4, w: 12, h: 0.4, fontFace: SANS, fontSize: 12, italic: true, color: MUTED, margin: 0 });
-})();
+// (Slide 'Smart flagging - SOP rule #1' removed 2026-10-28: the connectivity check is no longer part of the sanity.)
 
 // =================================================================== 7. IMPACT
 (() => {
@@ -308,13 +267,10 @@ function stat(slide, x, y, w, big, small, color) {
     s.addText(m[0], { x: cx + 0.22, y: cy + 0.12, w: cw - 0.4, h: 0.3, fontFace: SANS, fontSize: 11.5, color: MUTED, margin: 0 });
     s.addText([{ text: m[1] + "  ", options: { bold: true, color: m[3], fontSize: 16 } }, { text: m[2], options: { color: MUTED, fontSize: 11.5 } }], { x: cx + 0.22, y: cy + 0.44, w: cw - 0.4, h: 0.45, fontFace: SANS, margin: 0 });
   });
-  card(s, 0.6, 4.35, 12.13, 2.05, "FEF6E9");
-  s.addText([{ text: "⚠  Flagged this run (manual review — nothing auto-sent)  —  ", options: { bold: true, color: AMBER } }, { text: "carriers RED > 15 min, per SOP rule #1:", options: { color: INK } }], { x: 0.9, y: 4.55, w: 11.6, h: 0.4, fontFace: SANS, fontSize: 13.5, margin: 0 });
-  const flagLines = PROOF.flags
-    ? PROOF.flags.slice(0, 5).map((e) => `${e.carrier} — ${e.status}${e.minutes != null ? ` ~${e.minutes} min` : ""}${e.affectedODs && e.affectedODs.length ? "  →  " + e.affectedODs.join(", ") : ""}`)
-    : ["DB — unstable ~2 hrs  →  Berlin → Munich", "RENFE & IRYO — unstable ~2 hrs  →  Barcelona → Madrid  (still booked in)", "SBB — unstable ~2 hrs  →  Zermatt → Chur", "SJ, RHB — status unknown (watch-list)"];
-  s.addText(flagLines.map((t, i) => ({ text: t, options: { bullet: true, breakLine: i < flagLines.length - 1 } })), { x: 1.1, y: 5.0, w: 11, h: 1.3, fontFace: SANS, fontSize: 13, color: INK, paraSpaceAfter: 4, margin: 0 });
-  s.addText("Every affected route still returned fares — in both the booking cart and the API search.", { x: 0.9, y: 6.02, w: 11.6, h: 0.35, fontFace: SANS, fontSize: 11.5, italic: true, color: MUTED, margin: 0 });
+  // (The "flagged carriers" panel was removed 2026-10-28 with the connectivity check; its
+  // hardcoded fallback lines would have shown made-up flags.)
+  card(s, 0.6, 4.35, 12.13, 1.2, CLOUD);
+  s.addText("Every booking reference above is created live by the run. It stops at Traveler Details (status Created) and never pays.", { x: 0.9, y: 4.65, w: 11.6, h: 0.6, fontFace: SANS, fontSize: 13.5, color: INK, margin: 0 });
 })();
 
 // =================================================================== 10. ROADMAP
@@ -325,9 +281,8 @@ function stat(slide, x, y, w, big, small, color) {
   s.addShape(pres.shapes.OVAL, { x: 0.9, y: 2.15, w: 0.4, h: 0.4, fill: { color: GREEN } });
   s.addText("In place today", { x: 1.45, y: 2.12, w: 4.9, h: 0.45, fontFace: SANS, fontSize: 17, bold: true, color: INK, margin: 0 });
   s.addText([
-    { text: "4 core SOP checks fully automated", options: { bullet: true, breakLine: true } },
-    { text: ` sectors +  passes, every connectivity carrier covered`, options: { bullet: true, breakLine: true } },
-    { text: "Smart RED > 15 min flag (manual review, nothing auto-sent)", options: { bullet: true, breakLine: true } },
+    { text: "3 core SOP checks fully automated", options: { bullet: true, breakLine: true } },
+    { text: ` sectors +  passes booked to a reference per order`, options: { bullet: true, breakLine: true } },
     { text: "One command:  npm run sanity", options: { bullet: true, breakLine: true } },
     { text: "On-demand during your monitoring window", options: { bullet: true } },
   ], { x: 1.0, y: 2.75, w: 5.4, h: 3.4, fontFace: SANS, fontSize: 13.5, color: INK, paraSpaceAfter: 8, margin: 0 });

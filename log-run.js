@@ -10,10 +10,10 @@ const b2b = readJson('msc-b2b.json') || {};
 const api = readJson('api-searchability.json') || {};
 const env = (label) => (api.envs || []).find((e) => e.label === label);
 const prod = env('PRODUCTION');
-const stg = env('STAGING');
 
+// LocoHub staging and the connectivity-page flags are no longer part of the sanity (removed
+// 2026-10-28), so new history lines carry neither `apiStaging` nor `flags`. Older lines keep them.
 const dropped = (b2b.sectors || []).filter((s) => s.status !== 'IN CART' && s.id !== 'PASS').map((s) => `#${s.id} ${s.carrier}`);
-const flags = (b2b.connectivityEscalations || []).map((e) => e.carrier);
 
 const entry = {
   ts: new Date().toISOString(),
@@ -22,9 +22,7 @@ const entry = {
   passes: (b2b.passesInBooking || []).filter((p) => p.status === 'IN CART').map((p) => p.product),
   expired: b2b.bookingExpiredSectors != null ? b2b.bookingExpiredSectors : null,
   apiProd: prod ? `${prod.summary.pass}/${prod.rows.length}` : null,
-  apiStaging: stg ? `${stg.summary.pass}/${stg.rows.length}` : null,
   dropped,
-  flags,
 };
 fs.appendFileSync(HIST, JSON.stringify(entry) + '\n');
 console.log(`[history] logged: booking=${entry.booking || '(none)'} trains=${entry.trains || 'n/a'} apiProd=${entry.apiProd || 'n/a'} dropped=${dropped.length}`);

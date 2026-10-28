@@ -1,6 +1,7 @@
 // Prints a human-readable summary of the latest sanity run to the console — the same kind
-// of detailed breakdown given in chat (booking ref, per-check table, sector list, connectivity
-// flags with affected routes, API detail). Reads only the report files already on disk;
+// of detailed breakdown given in chat (booking ref, per-check table, sector list, API detail).
+// The carrier-connectivity page and the LocoHub staging check are NOT part of this summary any
+// more (removed from the sanity on 2026-10-28). Reads only the report files already on disk;
 // makes no network calls. Run standalone: node print-summary.js
 const fs = require('fs');
 const path = require('path');
@@ -11,13 +12,12 @@ const b2b = read('msc-b2b.json') || {};
 const api = read('api-searchability.json') || {};
 const env = (label) => (api.envs || []).find((e) => e.label === label);
 const prod = env('PRODUCTION');
-const stg = env('STAGING');
 
 const line = (ch = '─') => ch.repeat(72);
 const check = (ok) => (ok ? '[PASS]' : ok === false ? '[FAIL]' : '[ -- ]');
 
 console.log('\n' + line('='));
-console.log(' RAIL EUROPE MSC — SANITY RUN SUMMARY');
+console.log(' RAIL EUROPE ASC — SANITY RUN SUMMARY');
 console.log(line('='));
 
 if (b2b.booking) {
@@ -49,21 +49,11 @@ console.log(' CHECK                          RESULT');
 console.log(line());
 // A carrier that was already flagged down is an expected outage, not a POS regression.
 const sncfOk = Array.isArray(b2b.sncfPos) && b2b.sncfPos.length > 0 && b2b.sncfPos.every((r) => r.result !== 'ERROR');
-const cov = b2b.coverage;
-console.log(` Connectivity read              ${check(Array.isArray(b2b.connectivity) && b2b.connectivity.length > 0)} ${b2b.connectivity ? b2b.connectivity.length + ' status lines' : ''}`);
-if (cov) {
-  const total = cov.covered.length + cov.excluded.length + cov.pending.length + cov.unmapped.length;
-  console.log(` Carrier coverage               ${check(cov.unmapped.length === 0)} ${cov.covered.length}/${total} covered`
-    + (cov.pending.length ? `, ${cov.pending.length} pending OD` : '')
-    + (cov.excluded.length ? `, ${cov.excluded.length} excluded` : '')
-    + (cov.unmapped.length ? `, ${cov.unmapped.length} UNMAPPED` : ''));
-}
 console.log(` SNCF Connect POS               ${check(b2b.sncfPos && b2b.sncfPos.length ? sncfOk : null)} ${(b2b.sncfPos || []).map((r) => `${r.od}:${r.result}${r.count != null ? '(' + r.count + ')' : ''}`).join(', ')}`);
 console.log(` Booking reference              ${check(!!b2b.booking)} ${b2b.bookingStatus || ''}`);
 const testable = (e) => (e.summary.testable != null ? e.summary.testable : e.rows.length);
 const skipNote = (e) => (e.summary.skipped ? ` (+${e.summary.skipped} skipped — no inventory there)` : '');
 console.log(` API — Production               ${check(prod ? prod.summary.pass === testable(prod) : null)} ${prod ? `${prod.summary.pass}/${testable(prod)}${skipNote(prod)}` : 'n/a'}`);
-console.log(` API — Staging                  ${check(stg ? stg.summary.pass === testable(stg) : null)} ${stg ? `${stg.summary.pass}/${testable(stg)}${skipNote(stg)}` : 'n/a'}`);
 
 if (Array.isArray(b2b.sectors) && b2b.sectors.length) {
   const EXPECTED = 'EXPECTED (carrier flagged)';
@@ -77,7 +67,7 @@ if (Array.isArray(b2b.sectors) && b2b.sectors.length) {
   console.log(' In cart:');
   if (inCart.length) inCart.forEach((s) => console.log('   ' + s)); else console.log('   (none)');
   if (expected.length) {
-    console.log('\n ℹ EXPECTED — carrier already flagged on the connectivity page (not a regression):');
+    console.log('\n ℹ EXPECTED — carrier was already known to be down at the start of the run (not a regression):');
     expected.forEach((s) => console.log(`   #${s.id} ${s.carrier}`));
   }
   if (dropped.length) {
@@ -86,39 +76,11 @@ if (Array.isArray(b2b.sectors) && b2b.sectors.length) {
   }
 }
 
-if (cov && (cov.pending.length || cov.excluded.length || cov.unmapped.length)) {
-  console.log('\n' + line());
-  console.log(' CARRIER COVERAGE');
-  console.log(line());
-  if (cov.unmapped.length) console.log('  ⚠ UNMAPPED (on the connectivity page, tested nowhere): ' + cov.unmapped.join(', '));
-  if (cov.pending.length) console.log('  Pending an origin-destination: ' + cov.pending.join(', '));
-  if (cov.excluded.length) console.log('  Knowingly excluded: ' + cov.excluded.join(', '));
-}
-
-const esc = b2b.connectivityEscalations || [];
-const watch = b2b.connectivityWatch || [];
-console.log('\n' + line());
-console.log(' CONNECTIVITY FLAG  (SOP rule #1 — nothing auto-sent, manual review only)');
-console.log(line());
-if (esc.length) {
-  esc.forEach((e) => {
-    const dur = e.minutes != null ? `~${e.minutes} min` : 'duration not stated';
-    const ods = e.affectedODs && e.affectedODs.length ? `  ->  ${e.affectedODs.join(', ')}` : '';
-    console.log(`  ${e.carrier} — ${e.status} (${dur})${ods}`);
-  });
-} else {
-  console.log('  No carriers currently flagged (all under 15 min / stable).');
-}
-if (watch.length) {
-  console.log('\n  Watch-list (<=15 min or unknown, not escalated):');
-  console.log('   ' + watch.map((w) => `${w.carrier}:${w.status}${w.minutes != null ? '(' + w.minutes + 'm)' : ''}`).join(', '));
-}
-
-if (prod || stg) {
+if (prod) {
   console.log('\n' + line());
   console.log(' API DETAIL');
   console.log(line());
-  for (const [label, e] of [['Production', prod], ['Staging', stg]]) {
+  for (const [label, e] of [['Production', prod]]) {
     if (!e) continue;
     const issues = e.rows.filter((r) => r.status !== 'PASS');
     console.log(`  ${label}: ${e.summary.pass}/${(e.summary.testable != null ? e.summary.testable : e.rows.length)} PASS` + (e.summary.skipped ? `  (+${e.summary.skipped} skipped — no inventory there)` : '') + (issues.length ? '' : '  (clean)'));
