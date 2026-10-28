@@ -2,8 +2,8 @@
 
 Deterministic, repeatable **Manual Sanity Check** for Rail Europe **B2B**.
 Replaces "an AI clicking the live browser" (~28 min, non-deterministic) with a real
-test suite that covers **every carrier on the connectivity page** in **about 7 minutes**
-(longer on days a carrier's search times out — see "Runtime"),
+test suite that covers **19 point-to-point sectors plus 3 rail passes, the SNCF Connect POS check and the production API check** in **about 7 minutes**
+(longer on days a carrier's search times out — see "Runtime"; the connectivity page is no longer read since 2026-10-28),
 with zero human-error variance and auto-generated evidence — booking references, a
 Markdown/JSON report, an auto-updating manager slide deck, and a weekly summary.
 

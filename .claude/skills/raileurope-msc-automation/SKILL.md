@@ -6,9 +6,10 @@ description: Run the Rail Europe B2B Manual Sanity Check (MSC) via this repo's P
 # Rail Europe MSC Automation
 
 Deterministic Playwright replacement for the old "AI drives a live browser" approach
-(~28 min, token-heavy, non-deterministic). This repo covers **every carrier on the
-connectivity page** in **about 7 minutes** (longer when a carrier's search times out) and
-produces booking references as evidence.
+(~28 min, token-heavy, non-deterministic). This repo covers **19 point-to-point sectors plus
+3 rail passes, the SNCF Connect POS check and the production API check** in **about 7 minutes**
+(longer when a carrier's search times out; the connectivity page is no longer read since
+2026-10-28) and produces booking references as evidence.
 
 Repo: https://github.com/psalgaonkar7/Sanity-check.git — renamed from `MSC.git`, itself
 renamed from `Local.git`; GitHub still redirects both old names (primary copy: `RE\ASC` in
