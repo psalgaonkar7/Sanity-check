@@ -41,17 +41,16 @@ Folder: C:\Claude\RE\ASC     Repo: github.com/psalgaonkar7/Sanity-check
       China ref, e.g.  "Customer care china working :- OK (Booking ref: K123456789)".
       If one says [check manually] its saved login expired: run  npm run auth:portals
     - Paste the email body (Ctrl+V), review, press Send yourself.
-    - The mail has 10 points, each OK, KO or [check manually]  (the "B2B System Connectivity
+    - The mail has 9 points, each OK, KO or [check manually]  (the "B2B System Connectivity
       Status" point was removed on 2026-10-28, so everything after point 1 moved up by one):
         1 B2C & B2B check (customer care ROW booking refs)   2 Group Bookings-Salesforce Sync
         3 Key account ROW   4 Agents portal ROW   5 Key account China
         6 Customer care China (China booking ref, Z...)   7 SNCF   8 Primer
-        9 Dropfile sanity check   10 SF cases (shows 0 until Salesforce is approved)
+        9 Dropfile sanity check   (the "SF cases" line was removed from the mail on 2026-10-29)
  c) By hand each run (the tool cannot do these):
       - Slack #ariane-alerts-prod: any failed Glue job? If yes raise a Jira SR for the
         third-party team. (Procedure: Confluence SR page 2223472642; recording in
         #team-application-support)
-      - SF case count (point 10)
       - Any carrier listed as DROPPED in the run's summary (e.g. RegioJet): the mail line
         does not turn KO for that on its own, so look at it yourself
 

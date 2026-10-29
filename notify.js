@@ -221,7 +221,7 @@ function buildItems() {
 
   // The "B2B :- System Connectivity Status" line was REMOVED from the mail and the DM on
   // 2026-10-28 (Pratikesh: it must be excluded from the sanity run — it read KO on a carrier or
-  // page problem that the booking run already shows). The mail is now 10 points.
+  // page problem that the booking run already shows). The mail is now 9 points.
 
   const pos = b2b.sncfPos || [];
   const sncf = !pos.length ? { v: MANUAL, ok: null, note: 'SNCF check did not run' }
@@ -229,26 +229,21 @@ function buildItems() {
       : { v: 'KO', ok: false, note: pos.filter((r) => r.result !== 'PASS').map((r) => `${r.od} ${r.result}`).join(', ') };
 
   const primer = fromExtra(extras.primer);
+  if (extras.primer && extras.primer.notices && extras.primer.notices.length) {
+    primer.note = [primer.note, 'info notice on the status page (impact none): ' + extras.primer.notices.join('; ')].filter(Boolean).join(' | ');
+  }
   if (extras.primer && extras.primer.maintenance && extras.primer.maintenance.length) {
     primer.note = [primer.note, 'maintenance: ' + extras.primer.maintenance.join('; ')].filter(Boolean).join(' | ');
   }
 
-  // Salesforce isn't connected on this machine yet (see README: SF cases). Until it is, this
-  // is deliberately displayed as a plain "0" placeholder rather than [check manually] — it is
-  // NOT a verified count, and report/msc-extras.json still records the real SKIPPED status and
-  // reason, so nothing is hidden from an audit. Shown this way only because the mail is never
-  // auto-sent (a person reviews every draft) and because deciding case type is always a manual
-  // judgment call regardless of what this shows. Kept in `manualOnly` so it still surfaces in
-  // the "still to check" reminder even though it no longer reads as MANUAL in the mail itself.
+  // "SF cases not linked with an SR" is NOT a line of the mail or the DM any more (Pratikesh,
+  // 2026-10-29: it only ever showed a "0" placeholder because Salesforce isn't connected here).
+  // extra-checks.js still records the real status in report/msc-extras.json (sfCases).
   // The run reads the Glue sanity-check result (discrepancy count), but the support role can't
   // see run history for most Ariane jobs, so "did any Glue job fail" stays a manual Slack check.
   const dropfile = fromExtra(extras.dropfile);
   dropfile.manualOnly = true;
   dropfile.note = [dropfile.note, 'also check Slack #ariane-alerts-prod for failed Glue jobs'].filter(Boolean).join(' | ');
-
-  const sf = extras.sfCases;
-  const sfItem = !sf || sf.status === 'SKIPPED' ? { v: '0', ok: null, manualOnly: true, note: sf && sf.detail }
-    : { v: String(sf.count), ok: sf.count === 0 ? true : null, note: sf.count ? 'review: ' + sf.cases.map((c) => c.number).join(', ') : null };
 
   return [
     { label: 'B2C & B2B :- Check OD on B2C & B2B website', ...b2c },
@@ -262,7 +257,6 @@ function buildItems() {
     { label: 'SNCF :- Check OD', ...sncf },
     { label: 'Primer Status Page', ...primer },
     { label: 'Dropfile sanity check', ...dropfile },
-    { label: 'SF cases not linked with an SR', sep: ' : ', ...sfItem },
   ];
 }
 
@@ -272,7 +266,7 @@ const shown = (it) => it.v + (it.proof ? ` (${it.proof})` : '');
 
 function buildMail(items) {
   const bad = items.filter((i) => i.ok === false);
-  // Not shown as its own numbered line (kept to the 10 standard points), but a booking suite
+  // Not shown as its own numbered line (kept to the 9 standard points), but a booking suite
   // that didn't finish/capture a reference must still flip the subject to KO — see
   // bookingIssues(), the same check that withholds the "Sanity done" line in the DM.
   const status = (bad.length || bookingIssues().length) ? 'KO' : 'OK';

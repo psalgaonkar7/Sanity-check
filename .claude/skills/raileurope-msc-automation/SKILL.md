@@ -113,7 +113,7 @@ them `npm run auth:b2b` instead, which skips the AWS step entirely.
    (`lib/portals.js`; `npm run auth:portals` renews the logins). Customer care China also
    books one train to a booking ref (Traveler Details, Created; own cart, runs in parallel).
    Booking refs are on their portal's line (point 1 ROW, point 6 China), not in the subject.
-   **The mail has 10 points** (the connectivity point was removed 2026-10-28; SF is point 10).
+   **The mail has 9 points** (the connectivity point was removed 2026-10-28, and the "SF cases not linked with an SR" line on 2026-10-29; Dropfile is point 9).
 
 ### Rules for the DM and the mail — do not weaken these
 

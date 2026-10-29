@@ -274,7 +274,7 @@ extra time: the extra checks run in parallel with the browser suite.
 
 | Mail item | How it is checked | OK means |
 |---|---|---|
-| Primer Status Page | `status.primer.io` public Statuspage API | overall "none", every component operational, no open incident. Maintenance in progress or in the next 24 h is shown as a note |
+| Primer Status Page | `status.primer.io` public Statuspage API | overall "none", every component operational, no open incident with an impact (an open notice with impact "none", e.g. a security-disclosure post, is shown as a note, not a KO since 2026-10-29). Maintenance in progress or in the next 24 h is shown as a note |
 | Group Bookings–Salesforce Sync | AWS CLI (`era-prod` SSO profile) → AppFlow `tf-era-prod-shared-salesforce-flow` | flow Active and **no failed execution since the previous sanity** |
 | Key account ROW · Agents portal ROW · Key account China | each portal opened with its own saved login (`auth/<key>.json`, `npm run auth:portals`); a real train search (Paris→Bordeaux, then London→Paris, then Vienna→Munich; each route retried once) — `lib/portals.js` | logged in **and** a search returned trains. Expired/missing login = `[check manually]`; logged in but every search fails = KO |
 | Customer care China | the same logged-in search, then ONE train carted to a booking reference on Traveler Details (status Created, ref starts with **Z**). The cart is emptied before and again right after, so nothing is left to expire there — an EXPIRED item in the .cn cart cannot be removed through the site and blocks Traveler Details for the next run | search returned trains **and** the booking reference was captured; search OK but booking failed = KO (the reason says if an expired leftover was the cause) |
@@ -312,7 +312,7 @@ The rest is plain text:
 🟢 Sanity OK - 22:00 IST · took 6.2 min           (or 🔴 Sanity KO - 2 checks failed …)
 👉 NEEDS YOU                     each KO line with its reason (only when something failed)
 👉 CHECK YOURSELF BEFORE SENDING THE MAIL     the [check manually] items, with why
-✅ RESULT (same as the mail)     the 10 points
+✅ RESULT (same as the mail)     the 9 points
 📋 For the team channel, if you want to post it:
 Sanity done 22:00 IST- K070439139, K442252781
 📧 Mail draft is open in Outlook: click in the body, Ctrl+V, review, Send.
@@ -371,8 +371,8 @@ The run builds the full mail from its own results, then:
 1. copies it to the clipboard **formatted**, with the numbered list and links
 2. opens a new **Outlook compose window** with the subject filled in, e.g.
    `B2B & B2C Sanity Check - OK [28/10/2026; 13:00 IST]` (no booking refs in the subject — they
-   sit on point 1 and point 6). The mail has **10 points** since 2026-10-28 (the connectivity
-   point was removed; the rest moved up one)
+   sit on point 1 and point 6). The mail has **9 points** (the connectivity point was removed on 2026-10-28,
+   the SF-cases line on 2026-10-29)
 
 Click in the body, press **Ctrl+V**, review, press **Send**. It is never sent for you: it goes
 to a distribution list and includes judgement calls, so a person presses Send.
@@ -380,9 +380,9 @@ to a distribution list and includes judgement calls, so a person presses Send.
 Honesty rules built into the draft:
 
 - Anything the run did **not** verify is written as **`[check manually]`**, never as OK. The
-  one deliberate exception is point 10 (SF cases): it shows a plain `0` placeholder until the
-  Salesforce CLI is approved, and is always listed under "still to check" so it is counted by
-  hand.
+  SF cases is no longer a line of the mail or the DM (removed 2026-10-29: it only ever showed a
+  `0` placeholder while the Salesforce CLI was not set up); `extra-checks.js` still records it in
+  `report/msc-extras.json`.
 - The subject says `KO` if any automated item failed.
 - Carrier connectivity (the health-center page) is **not part of the sanity at all** any more
   (not read, not mailed), and a dropped carrier (e.g. RegioJet) does not turn a line KO by

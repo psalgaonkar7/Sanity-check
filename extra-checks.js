@@ -41,7 +41,11 @@ async function checkPrimer() {
     if (!r.ok) return { status: 'NOT OK', detail: `status API returned HTTP ${r.status}` };
     const j = await r.json();
     const broken = (j.components || []).filter((c) => c.status !== 'operational' && !c.group);
-    const incidents = (j.incidents || []).filter((i) => i.status !== 'resolved' && i.status !== 'postmortem');
+    const open = (j.incidents || []).filter((i) => i.status !== 'resolved' && i.status !== 'postmortem');
+    // An open incident with impact "none" is an informational notice (e.g. the 23 Oct 2026 "security
+    // disclosures" post, left in "monitoring"), not an outage: it is shown as a note, never a KO.
+    const incidents = open.filter((i) => i.impact !== 'none');
+    const notices = open.filter((i) => i.impact === 'none').map((i) => i.name);
     const soon = Date.now() + 24 * 3600 * 1000;
     const maint = (j.scheduled_maintenances || [])
       .filter((m) => m.status === 'in_progress' || new Date(m.scheduled_for).getTime() < soon)
@@ -54,6 +58,7 @@ async function checkPrimer() {
       status: ok ? 'OK' : 'NOT OK',
       detail: ok ? (j.status && j.status.description) : bits.join(' | ') || (j.status && j.status.description),
       maintenance: maint,
+      notices,
     };
   } catch (e) {
     return { status: 'SKIPPED', detail: 'could not reach status.primer.io: ' + String(e.cause && e.cause.code || e).slice(0, 80) };
