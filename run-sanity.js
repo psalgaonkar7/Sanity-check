@@ -3,6 +3,8 @@
 // never hide the (bot-proof) search signal. Then it auto-refreshes the manager deck from
 // the fresh report data. Exits non-zero if the browser or API part failed.
 const { spawnSync, spawn } = require('child_process');
+const fs = require('fs');
+const path = require('path');
 require('./lib/env').loadEnv();   // .env settings reach every child process (extra checks, API, notify)
 
 // One id for the whole run, inherited by every Playwright worker. The b2b spec merges its
@@ -43,7 +45,7 @@ function startBackground(cmd) {
   process.stdout.write(apiRes.out);
   const api = apiRes.code;
 
-  console.log('\n=== 3/5 · Extra checks (Primer · AppFlow · China portals · SF cases) ===\n');
+  console.log('\n=== 3/5 · Extra checks (Primer · AppFlow · 4 portal checks + China booking · dropfile) ===\n');
   const extrasRes = await extrasPromise;
   process.stdout.write(extrasRes.out); // informational: never changes the run's exit code
 
@@ -61,6 +63,26 @@ function startBackground(cmd) {
   const deckNote = deck === 0 ? '' : '  ·  ⚠ DECK NOT UPDATED — close Rail-Europe-MSC-Automation-Overview.pptx and run `npm run deck`';
   // The sanity mail draft (never auto-sent) + the result DM to Pratikesh via the Assistant webhook.
   run('node notify.js');
+
+  // Keep a copy of this run's reports in report/runs/<run time>/ (last 30 runs), so a run can be
+  // investigated later — before 2026-10-30 only the latest run's detail was kept, which made a
+  // multi-day pattern like the RegioJet drops impossible to trace from the files.
+  try {
+    const stamp = process.env.MSC_RUN_ID.slice(0, 19).replace(/[:T]/g, '-');
+    const dir = path.join(__dirname, 'report', 'runs', stamp);
+    fs.mkdirSync(dir, { recursive: true });
+    for (const f of ['msc-b2b.json', 'msc-extras.json', 'api-searchability.json', 'msc-passes.json', 'results.json', 'sanity-mail.txt']) {
+      const src = path.join(__dirname, 'report', f);
+      if (fs.existsSync(src)) fs.copyFileSync(src, path.join(dir, f));
+    }
+    fs.writeFileSync(path.join(dir, 'console-api-and-extras.txt'), String(apiRes.out) + '\n' + String(extrasRes.out));
+    const runsDir = path.join(__dirname, 'report', 'runs');
+    const all = fs.readdirSync(runsDir).sort();
+    for (const old of all.slice(0, Math.max(0, all.length - 30))) fs.rmSync(path.join(runsDir, old), { recursive: true, force: true });
+    console.log(`[runs] this run's reports kept in report/runs/${stamp}/`);
+  } catch (e) {
+    console.log('[runs] could not keep a copy of this run\'s reports: ' + String(e).slice(0, 100));
+  }
 
   console.log(`=== sanity done · browser ${b2b === 0 ? 'PASS' : 'FAIL'} · api ${api === 0 ? 'PASS' : 'FAIL'} ===${deckNote}`);
   process.exit(b2b || api ? 1 : 0);

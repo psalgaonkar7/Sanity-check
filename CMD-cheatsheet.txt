@@ -143,8 +143,15 @@ Folder: C:\Claude\RE\ASC     Repo: github.com/psalgaonkar7/Sanity-check
  - The carrier-connectivity page and LocoHub staging are NOT part of the sanity any more
    (removed 2026-10-28): no mail point, no KO from them.
  - A sector is only DROPPED/ERROR after the primary route AND all backup routes failed.
-   A dropped carrier (e.g. RegioJet) is in the run summary only: it does not turn a mail
-   line KO by itself, so look at it yourself.
+   A dropped carrier now shows on mail point 1 ("not booked: RegioJet (RJET)") and in the DM
+   under "check yourself", with its supplier ("via Distribusion"). It does not turn the line
+   KO by itself, so look at it yourself.
+ - RegioJet searches 14 days ahead (not 45): LocoHub only has RegioJet trains up to a cut-off
+   date. If RegioJet drops again, check whether the cut-off moved closer.
+ - "Traveler Details did not open ... retrying once" in the run = the portal showed "Sorry,
+   something unexpected happened"; the run retried. Only a second failure counts.
+ - B2C is NOT really tested: the API check uses LocoHub (the B2B route); the B2C website
+   calls the carriers itself.
  - The run no longer reads the connectivity page, so the cart order is now simply the list
    order (no carriers are moved to the end any more).
  - China KO with title "Loading | Rail Europe": portal slow to boot. Wait is now 120s.
@@ -162,6 +169,7 @@ Folder: C:\Claude\RE\ASC     Repo: github.com/psalgaonkar7/Sanity-check
       report\msc-extras.json         China / Primer / AppFlow / Dropfile results
       report\api-searchability.json  API results
       report\sanity-mail.txt         the last mail draft text
+      report\runs\<time>\            the same reports for each of the last 30 runs
       run-history.jsonl              one line per full run
       README.md                      full documentation
       versions.txt                   libraries and versions (not committed)

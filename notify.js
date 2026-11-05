@@ -213,6 +213,19 @@ function buildItems() {
       : prod.summary.pass === testable ? { v: 'OK', ok: true, proof: refProof }
         : { v: 'KO', ok: false, proof: refProof, note: `${testable - prod.summary.pass}/${testable} production API routes failing` };
 
+  // A carrier that could not be booked on ANY route must be visible in the mail and the DM, not
+  // only in the console summary (before 2026-10-30 the line read a plain OK with RegioJet
+  // missing). It does not turn the line KO by itself — one carrier down is for a person to judge —
+  // but it is named on the line and listed under "check yourself" in the DM.
+  const notBooked = (b2b.sectors || []).filter((s) => s.status !== 'IN CART');
+  if (notBooked.length && b2c.v === 'OK') {
+    const names = notBooked.map((s) => s.carrier.replace(/^PASS\//, '')).join(', ');
+    b2c.proof = [b2c.proof, `not booked: ${names}`].filter(Boolean).join('; ');
+    b2c.manualOnly = true;
+    const via = (s) => { const j = data.ptpJourneys.find((x) => x.id === s.id); return j && j.connector ? ` via ${j.connector}` : ''; };
+    b2c.note = [b2c.note, `could not be booked on any route: ${notBooked.map((s) => `${s.carrier}${via(s)} (${String(s.error || s.status).replace(/\s+/g, ' ').slice(0, 90)})`).join(' | ')} - check by hand`].filter(Boolean).join(' | ');
+  }
+
   const ccChina = fromExtra(extras.chinaCustomerCare);
   if (ccChina.ok && extras.chinaCustomerCare.booking) {
     const bk = extras.chinaCustomerCare.booking;

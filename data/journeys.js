@@ -99,10 +99,17 @@ const DATA = {
     // REJE and RJET are two RegioJet connectors that the results page renders with the SAME
     // `regiojet` logo — but the LocoHub API distinguishes them by route (Prague->Brno returns
     // REJE, Wien->Gyor returns RJET), so keeping both ODs is what actually covers both.
+    // RegioJet: own test date (`daysAhead`) and brand check (`apiBrand`). LocoHub production has
+    // RegioJet inventory only up to a cut-off (checked 2026-10-24: Vienna routes to 30 Nov 2026,
+    // Prague-Brno to 12 Dec 2026), so the global +45 days fell past it and RJET/REJE were dropped
+    // every run although RegioJet itself was fine. 14 days stays inside that window. `apiBrand`
+    // makes the API check require RegioJet trains: before, Wien->Gyor "passed" on OBB trains.
     { id: 12, carrier: 'RegioJet (REJE)',  connectivityNames: ['REJE'],             carrierSlug: 'regiojet',
+      connector: 'Distribusion', daysAhead: 14, apiBrand: 'RegioJet',
       fromCode: 'CZ:prague', toCode: 'CZ:brno',
       from: { q: 'Prague',    opt: 'Praha hl.n, Czechia' },                   to: { q: 'Brno',      opt: 'Brno hl.n., Czechia' } },
     { id: 13, carrier: 'RegioJet (RJET)',  connectivityNames: ['RJET'],             carrierSlug: 'regiojet',
+      connector: 'Distribusion', daysAhead: 14, apiBrand: 'RegioJet',
       fromCode: 'AT:wien_hbf', toCode: 'HU:gyor',
       from: { q: 'Wien',      opt: 'Wien Hbf, Austria' },                     to: { q: 'Gyor',      opt: 'Gyor, Hungary' } },
     { id: 14, carrier: 'TRENITALIA',       connectivityNames: ['TRENITALIA'],       carrierSlug: 'trenitalia',
@@ -130,6 +137,7 @@ const DATA = {
       fromCode: 'BE:brussels_midi', toCode: 'DE:berlin',
       from: { q: 'Bruxelles', opt: 'Bruxelles/Brussels-Midi, Belgium' },      to: { q: 'Berlin',    opt: 'Berlin, Germany' } },
     { id: 17, carrier: 'LEO EXPRESS',      connectivityNames: ['LEO EXPRESS'],      carrierSlug: 'leo_express',
+      connector: 'Distribusion', apiBrand: 'Leo Express',
       fromCode: 'CZ:prague', toCode: 'CZ:ostrava',
       from: { q: 'Prague',    opt: 'Praha hl.n, Czechia' },                   to: { q: 'Ostrava',   opt: 'Ostrava, Czechia' } },
     // carrierSlug is null because French regional services carry NO carrier logo in the results
@@ -167,7 +175,10 @@ const DATA = {
   pendingDiscovery: [
     { carrier: 'ARENAWAYS',        note: 'no logo on Torino->Milan or Torino->Savona (both return trenitalia/italo only). May not be sold on this portal at all — worth confirming with the provider team before hunting more routes.' },
     { carrier: 'CAMPANIA EXPRESS', note: 'Napoli Centrale->Sorrento returns a genuine zero-result; Napoli Centrale->Pompei returns only a trenitalia logo. No campania* slug seen on any route tried.' },
-    { carrier: 'SJ',               note: 'Stockholm->Gothenburg Central and Stockholm->Malmo both return a genuine zero-result (correct stations selected, verified live). No sj slug seen yet.' },
+    // SJ is NOT on the Tech & Product "Rail Europe product coverage" page (2026-10-28), so it
+    // is probably not sold at all; kept here only as a record. Arenaways and Campania Express
+    // are listed there as B2C-ONLY, which explains why no B2B route was ever found for them.
+    { carrier: 'SJ',               note: 'Stockholm->Gothenburg Central and Stockholm->Malmo both return a genuine zero-result (correct stations selected, verified live). No sj slug seen yet. Not on the product coverage page - probably not sold.' },
   ],
 
   // Rail passes to validate (search-only). The PASSES tab is destination-based:
@@ -350,5 +361,20 @@ const VERIFIED_EXTRA = {
 DATA.ptpJourneys.forEach((j) => {
   j.alternates = [...(ALTERNATES[j.id] || []), ...(VERIFIED_EXTRA[j.id] || [])];
 });
+
+// Which supplier connection (LocoHub "Bahn" provider) each sector goes through, from the
+// Tech & Product page "How Rail Europe systems connect to carriers" (Mandar Kadam, checked
+// 2026-10-30). Shown next to a dropped sector, so a failure points at the right system: e.g.
+// RegioJet, Iryo, European Sleeper and Leo Express all come through Distribusion, so if only
+// RegioJet fails the aggregator itself is fine.
+const CONNECTOR_BY_ID = {
+  1: 'OBB API', 2: 'DB PST', 3: 'not on the page (Alleo: DB or SNCF)', 4: 'Eurostar API', 5: 'PAO (SNCF)', 6: 'Atomised',
+  7: 'BeneMoove (Benerail)', 8: 'Renfe VaV', 9: 'Distribusion', 10: 'Ouigo Spain API',
+  11: 'RhB reseller API / SBB B2P', 12: 'Distribusion', 13: 'Distribusion', 14: 'PICO (Trenitalia)',
+  15: 'NTV (Italo)', 16: 'Distribusion', 17: 'Distribusion', 18: 'PAO (SNCF)', 19: 'PAO (SNCF)',
+};
+DATA.ptpJourneys.forEach((j) => { if (!j.connector) j.connector = CONNECTOR_BY_ID[j.id] || null; });
+const PASS_CONNECTOR = { EURAIL: 'Interrail / Eurail API', SBB: 'SBB B2P', BRITRAIL: 'Atomised' };
+DATA.passesToAdd.forEach((p) => { if (!p.connector) p.connector = PASS_CONNECTOR[(p.connectivityNames || [])[0]] || null; });
 
 module.exports = DATA;

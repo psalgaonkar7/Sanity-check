@@ -72,7 +72,8 @@ if (Array.isArray(b2b.sectors) && b2b.sectors.length) {
   }
   if (dropped.length) {
     console.log('\n ⚠ DROPPED:');
-    dropped.forEach((s) => console.log(`   #${s.id} ${s.carrier} — ${s.status}${s.error ? ': ' + s.error : ''}`));
+    const conn = (s) => { const j = (require('./data/journeys').ptpJourneys || []).find((x) => x.id === s.id); return j && j.connector ? ` [via ${j.connector}]` : ''; };
+    dropped.forEach((s) => console.log(`   #${s.id} ${s.carrier}${conn(s)} — ${s.status}${s.error ? ': ' + s.error : ''}`));
   }
 }
 

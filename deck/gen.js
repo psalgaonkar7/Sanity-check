@@ -138,7 +138,7 @@ function stat(slide, x, y, w, big, small, color) {
   s.addText([
     { text: "Fast and bot-proof — no website wall", options: { bullet: true, breakLine: true } },
     { text: "Every sanity route on Production", options: { bullet: true, breakLine: true } },
-    { text: "Production engine is shared with B2C", options: { bullet: true, breakLine: true } },
+    { text: "Same LocoHub engine as Rail Portal (not the B2C site)", options: { bullet: true, breakLine: true } },
     { text: "Confirms results + sample fares per route", options: { bullet: true, breakLine: true } },
     { text: "Read-only — never books", options: { bullet: true } },
   ], { x: 7.15, y: 3.05, w: 5.4, h: 2.6, fontFace: SANS, fontSize: 13.5, color: INK, paraSpaceAfter: 6, margin: 0 });
@@ -190,14 +190,15 @@ function stat(slide, x, y, w, big, small, color) {
     [cell("All carriers — search to booking reference"), AUTO(), cell(` sectors +  passes → booking ref per order; stops at Traveler Details`)],
     [cell("Passes — search + add-to-cart"), AUTO(), cell("Interrail / Swiss / BritRail — all searched AND in the booking")],
     [cell("SNCF Connect key-account search"), AUTO(), cell("POS 832072551 · search-only")],
-    [cell("Salesforce – ERA sync (Groups)"), MAN(), cell("Needs AWS AppFlow access")],
-    [cell("China portal login"), MAN(), cell("Needs China portal session")],
-    [cell("Daily dropfile check"), MAN(), cell("Separate process / file access")],
+    [cell("Salesforce – ERA sync (Groups)"), AUTO(), cell("AWS AppFlow flow status, no failed run since the last sanity")],
+    [cell("Portal logins (key account / agents ROW, China ×2)"), AUTO(), cell("Logged-in search on each; China customer care also books one train")],
+    [cell("Daily dropfile check"), AUTO(), cell("Ariane Glue discrepancy count (failed Glue jobs still checked by hand in Slack)")],
+    [cell("Primer status page"), AUTO(), cell("Public status API")],
   ];
   s.addTable(rows, { x: 0.6, y: 1.7, w: 12.13, colW: [5.0, 2.0, 5.13], rowH: 0.47, border: { pt: 1, color: LINE }, align: "left", valign: "middle", margin: [3, 7, 3, 7] });
   s.addText([
-    { text: "3 of the SOP's core checks are fully automated", options: { bold: true, color: GREEN } },
-    { text: "  ·  3 remain manual (need access).", options: { color: MUTED } },
+    { text: "All 7 checklist items above run automatically", options: { bold: true, color: GREEN } },
+    { text: "  ·  still by hand: failed Glue jobs (Slack), B2C website, payment/ticketing.", options: { color: MUTED } },
   ], { x: 0.6, y: 6.95, w: 12, h: 0.35, fontFace: SANS, fontSize: 12.5, margin: 0 });
 })();
 
@@ -207,7 +208,7 @@ function stat(slide, x, y, w, big, small, color) {
 (() => {
   const s = pres.addSlide();
   header(s, "The impact", "Faster, consistent, repeatable");
-  s.addChart(pres.charts.BAR, [{ name: "Minutes", labels: ["Manual (by hand)", "Automated"], values: [28, 3.5] }], {
+  s.addChart(pres.charts.BAR, [{ name: "Minutes", labels: ["Manual (by hand)", "Automated"], values: [28, 7] }], {
     x: 0.6, y: 1.95, w: 6.6, h: 4.6, barDir: "col",
     chartColors: ["9AA3C0", RED], chartArea: { fill: { color: WHITE } },
     catAxisLabelColor: "64748B", catAxisLabelFontFace: SANS, catAxisLabelFontSize: 13,
@@ -216,9 +217,9 @@ function stat(slide, x, y, w, big, small, color) {
     showValue: true, dataLabelPosition: "outEnd", dataLabelColor: INK, dataLabelFontFace: SANS, dataLabelFontSize: 14, dataLabelFontBold: true,
     showLegend: false, showTitle: false,
   });
-  card(s, 7.55, 2.0, 5.18, 1.35, CLOUD); stat(s, 7.55, 2.0, 5.18, "~8× faster", "28 min → ~3.5 min", RED);
+  card(s, 7.55, 2.0, 5.18, 1.35, CLOUD); stat(s, 7.55, 2.0, 5.18, "~4× faster", "28 min → ~7 min (all checks, unattended)", RED);
   card(s, 7.55, 3.5, 5.18, 1.35, CLOUD); stat(s, 7.55, 3.5, 5.18, "0", "manual steps → no human error", INK);
-  card(s, 7.55, 5.0, 5.18, 1.35, CLOUD); stat(s, 7.55, 5.0, 5.18, "~2–3 min", "to a booking number, on demand", GREEN);
+  card(s, 7.55, 5.0, 5.18, 1.35, CLOUD); stat(s, 7.55, 5.0, 5.18, "~4–5 min", "to the booking numbers, on demand", GREEN);
 })();
 
 // =================================================================== 8. GUARDRAILS
@@ -252,12 +253,12 @@ function stat(slide, x, y, w, big, small, color) {
   card(s, 0.6, 1.85, 4.0, 2.2, INK);
   s.addText("Booking reference", { x: 0.85, y: 2.1, w: 3.5, h: 0.4, fontFace: SANS, fontSize: 13, color: "9AA3C0", margin: 0 });
   s.addText(PROOF.bookingRef, { x: 0.85, y: 2.55, w: 3.5, h: 0.7, fontFace: SERIF, fontSize: 30, bold: true, color: WHITE, margin: 0 });
-  s.addText(`${PROOF.trains.split("/")[0]} trains + ${PROOF.pass && !/^none/.test(PROOF.pass) ? "1 pass" : "0 pass"} · ${PROOF.expired} expired`, { x: 0.85, y: 3.35, w: 3.5, h: 0.4, fontFace: SANS, fontSize: 13, color: "CAD2EA", margin: 0 });
+  s.addText(`${PROOF.trains.split("/")[0]} trains + ${PROOF.pass && !/^none/.test(PROOF.pass) ? PROOF.pass.split(", ").length + " passes" : "0 passes"} · ${PROOF.expired} expired`, { x: 0.85, y: 3.35, w: 3.5, h: 0.4, fontFace: SANS, fontSize: 13, color: "CAD2EA", margin: 0 });
   const mini = [
-    ["Random pass in booking", PROOF.pass, "added to same cart", GREEN],
+    ["Passes in booking", PROOF.pass, "booked in the same orders", GREEN],
     ["API — Production", `${PROOF.prodApi} routes`, "~10s (parallel)", GREEN],
-    ["Passes searched", "3 + 36 products", "Interrail/Swiss/BritRail", GREEN],
-    ["Runtime", "~3.3 min", "end-to-end", RED],
+    ["Passes searched", "3 families", "Interrail/Swiss/BritRail", GREEN],
+    ["Runtime", "~7 min", "end-to-end", RED],
   ];
   const cw = 3.9, ch = 1.02, gx = 0.28;
   mini.forEach((m, i) => {
@@ -281,7 +282,7 @@ function stat(slide, x, y, w, big, small, color) {
   s.addShape(pres.shapes.OVAL, { x: 0.9, y: 2.15, w: 0.4, h: 0.4, fill: { color: GREEN } });
   s.addText("In place today", { x: 1.45, y: 2.12, w: 4.9, h: 0.45, fontFace: SANS, fontSize: 17, bold: true, color: INK, margin: 0 });
   s.addText([
-    { text: "3 core SOP checks fully automated", options: { bullet: true, breakLine: true } },
+    { text: "All 7 checklist items automated", options: { bullet: true, breakLine: true } },
     { text: ` sectors +  passes booked to a reference per order`, options: { bullet: true, breakLine: true } },
     { text: "One command:  npm run sanity", options: { bullet: true, breakLine: true } },
     { text: "On-demand during your monitoring window", options: { bullet: true } },
@@ -290,10 +291,10 @@ function stat(slide, x, y, w, big, small, color) {
   s.addShape(pres.shapes.OVAL, { x: 7.05, y: 2.15, w: 0.4, h: 0.4, fill: { color: RED } });
   s.addText("Planned (needs access / approval)", { x: 7.6, y: 2.12, w: 5.0, h: 0.45, fontFace: SANS, fontSize: 17, bold: true, color: INK, margin: 0 });
   s.addText([
-    { text: "Salesforce – ERA sync check  (AWS access)", options: { bullet: true, breakLine: true } },
-    { text: "China portal login check", options: { bullet: true, breakLine: true } },
-    { text: "Daily dropfile check", options: { bullet: true, breakLine: true } },
-    { text: "Scheduled auto-runs + Instatus / Teams feeds", options: { bullet: true } },
+    { text: "A real B2C website check (bot-protected today)", options: { bullet: true, breakLine: true } },
+    { text: "Deeper booking steps: payment, ticket, cancel (needs a decision)", options: { bullet: true, breakLine: true } },
+    { text: "Missing products: Trenitalia pass, One Country passes, Swiss cards", options: { bullet: true, breakLine: true } },
+    { text: "SF case count (Salesforce CLI approval)", options: { bullet: true } },
   ], { x: 7.15, y: 2.75, w: 5.4, h: 3.4, fontFace: SANS, fontSize: 13.5, color: INK, paraSpaceAfter: 6, margin: 0 });
 })();
 

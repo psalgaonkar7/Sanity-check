@@ -64,6 +64,11 @@ const ODS = (() => {
       // Environments known to hold no inventory for this OD. Reported as SKIPPED with the
       // reason instead of counting as a failure — see `skipEnvs` note in data/journeys.js.
       skipEnvs: j.apiSkipEnvs || [],
+      // Optional per-journey travel date (days ahead) and required carrier brand, see the
+      // RegioJet note in data/journeys.js. With `brand`, the route only passes when at least one
+      // returned train is that carrier's (LocoHub `transport_name`), not any carrier's.
+      days: j.daysAhead,
+      brand: j.apiBrand,
       // Verified fallback ODs, tried in order if the primary comes back empty or errors.
       alternates: (j.alternates || []).filter((a) => a.fromCode && a.toCode)
         .map((a) => ({ from: a.fromCode, to: a.toCode, route: `${a.from.q} -> ${a.to.q}` })),
@@ -88,7 +93,7 @@ async function mapPool(items, size, fn) {
   return out;
 }
 
-async function searchOne(endpoint, token, od, dateStr) {
+async function searchOne(endpoint, token, od, dateStr, brand) {
   const body = { data: { type: 'new_search', attributes: {
     start_station_code: od.from, finish_station_code: od.to,
     departure_date: dateStr, departure_time: '10:00',
@@ -136,6 +141,13 @@ async function searchOne(endpoint, token, od, dateStr) {
     const cheapest = fares.reduce((a, b) => (Number(a.attributes.price.amount) <= Number(b.attributes.price.amount) ? a : b));
     price = `${cheapest.attributes.price.amount} ${cheapest.attributes.price.currency || ''}`.trim();
   }
+  // Carrier check: products alone are not proof that THIS carrier sells the route (Wien->Gyor
+  // returned 5 OBB products and "passed" while RegioJet had none).
+  if (brand && products.length) {
+    const re = new RegExp(brand, 'i');
+    const own = included.filter((c) => c.attributes && re.test(c.attributes.transport_name || '')).length;
+    if (!own) return { status: 'NO RESULTS', http: 200, products: products.length, ms, price, note: `no ${brand} trains (only other carriers)` };
+  }
   return { status: products.length ? 'PASS' : 'NO RESULTS', http: 200, products: products.length, ms, price };
 }
 
@@ -169,10 +181,11 @@ async function searchOne(endpoint, token, od, dateStr) {
       }
       // Primary first, then each verified fallback. One empty OD says nothing about whether
       // search works — only "every route we know for this carrier is empty" does.
-      let res = await searchOne(endpoint, token, od, dateStr);
+      const odDate = od.days != null ? futureDate(od.days) : dateStr;
+      let res = await searchOne(endpoint, token, od, odDate, od.brand);
       if (res.status === 'PASS') return { ...od, ...res };
       for (const alt of od.alternates) {
-        const altRes = await searchOne(endpoint, token, alt, dateStr);
+        const altRes = await searchOne(endpoint, token, alt, odDate, od.brand);
         if (altRes.status === 'PASS') {
           return { ...od, ...altRes, route: alt.route, usedFallback: true, primaryRoute: od.route, note: `primary "${od.route}" ${res.status}` };
         }
@@ -188,7 +201,7 @@ async function searchOne(endpoint, token, od, dateStr) {
     if (toRecheck.length) {
       console.log(`    (transient? re-checking ${toRecheck.length} timed-out route(s) sequentially…)`);
       for (const r of toRecheck) {
-        const retry = await searchOne(endpoint, token, r, dateStr);
+        const retry = await searchOne(endpoint, token, r, r.days != null ? futureDate(r.days) : dateStr, r.brand);
         const i = rows.findIndex((x) => x.id === r.id);
         if (i >= 0) rows[i] = { ...rows[i], ...retry, rechecked: true };
       }

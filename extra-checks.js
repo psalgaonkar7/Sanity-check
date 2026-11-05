@@ -79,9 +79,19 @@ function awsCli() {
   return fs.existsSync(guess) ? guess : 'aws';
 }
 
+// A one-off network hiccup ("Could not connect to the endpoint", seen 2026-11-01 23:52 IST on AppFlow while the
+// login was fine) used to turn the mail line into [check manually]. Retry those up to 3 times, 5 s apart; an expired
+// login or a missing CLI is not retried.
+const NET_ERR = /could not connect to the endpoint|connect timeout|read timeout|timed out|connection (reset|aborted|was closed)|ETIMEDOUT|ECONNRESET|temporary failure|name resolution/i;
 function aws(args, profile = process.env.AWS_PROFILE_SANITY || 'era-prod') {
-  const r = spawnSync(awsCli(), [...args, '--region', 'eu-west-1', '--profile', profile, '--output', 'json'],
-    { encoding: 'utf8', timeout: 60000 });
+  let r;
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    r = spawnSync(awsCli(), [...args, '--region', 'eu-west-1', '--profile', profile, '--output', 'json'],
+      { encoding: 'utf8', timeout: 60000 });
+    const text = r.error ? String(r.error.code || r.error.message) : (r.status !== 0 ? (r.stderr || r.stdout || '') : '');
+    if (!text || !NET_ERR.test(text) || attempt === 3) break;
+    spawnSync(process.execPath, ['-e', 'setTimeout(()=>{},5000)']);
+  }
   if (r.error) return { err: String(r.error.code || r.error.message) };
   if (r.status !== 0) return { err: (r.stderr || r.stdout || '').trim() };
   try { return { json: JSON.parse(r.stdout) }; } catch { return { err: 'unparseable AWS CLI output' }; }

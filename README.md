@@ -48,8 +48,12 @@ has already caused two misdiagnoses. For the same reason `playwright.config.js` 
 | 8 | **Weekly report** | Every run is logged; `npm run weekly` compiles the week into `weekly-report.md` |
 
 **B2C note:** the public consumer site (`www.raileurope.com`) is protected by anti-bot
-detection, so it cannot be driven by a headless browser. Its search engine is validated
-instead through the **Production API check** (#6), which is the same engine B2C uses.
+detection, so it cannot be driven by a headless browser. **B2C is therefore not really
+tested.** The Production API check (#6) searches LocoHub, which is the B2B (ERA) route — the B2C
+website does NOT use LocoHub: it calls the carriers itself through its own copy of the Bahn
+library (Tech & Product page "How Rail Europe systems connect to carriers", 2026-10-30). The API
+check proves the carriers answer searches, which B2C also depends on, but not the website's own
+calls. (Before 2026-10-30 this README wrongly said the API check is "the same engine B2C uses".)
 
 ---
 
@@ -122,6 +126,43 @@ Do not confuse that with **verification** of a carrier we already know (see
 [Fallback routes](#fallback-routes)). There the brand is exactly the right thing to match
 on, because we already know which brands belong to that operator. Discovery asks "whose
 train is this?"; verification asks "is *our* carrier's brand in these results?".
+
+### Reliability fixes (2026-10-30)
+
+- **RegioJet searches on its own date.** LocoHub production only has RegioJet trains up to a
+  cut-off (checked 2026-10-24: Vienna routes to 30 Nov 2026, Prague–Brno to 12 Dec 2026), so the
+  normal +45 days fell past it and RJET was dropped in every run although RegioJet was fine. The
+  two RegioJet sectors now carry `daysAhead: 14` in `data/journeys.js` (booking and API check).
+  Any sector can get its own `daysAhead` the same way.
+- **The API check requires the carrier's own trains** for sectors with `apiBrand` (RegioJet,
+  Leo Express): Wien→Gyor used to "pass" on 5 ÖBB trains while RegioJet had none.
+- **A carrier that could not be booked is in the mail and the DM.** Point 1 now reads e.g.
+  `OK (Booking ref: K…, K…; not booked: RegioJet (RJET))`, the DM lists it under "check
+  yourself", and the reason names the supplier connection ("via Distribusion"). It still does
+  not turn the line KO by itself — one carrier down is for a person to judge.
+- **Each sector and pass names its supplier connection** (`connector` in `data/journeys.js`,
+  from the Tech & Product page "How Rail Europe systems connect to carriers"): DB PST, PAO
+  (SNCF), PICO (Trenitalia), Distribusion (Iryo, RegioJet, European Sleeper, Leo Express),
+  BeneMoove (SNCB/NS), Atomised (UK + BritRail), and so on. If several carriers on the same
+  connection fail together, suspect the connection; if one fails alone, suspect that carrier.
+- **One retry on portal glitches:** if Traveler Details does not open ("Sorry, something
+  unexpected happened", seen 2026-10-28) the cart is reloaded and tried once more; if the home
+  page stays on its spinner before a pass search, it is reloaded once.
+- **Each run's reports are kept** in `report/runs/<run time>/` (the last 30 runs): the booking,
+  extras, API and Playwright results, the mail text, and the API + extra-check console output.
+
+### Product coverage vs. the Tech & Product page (2026-10-30)
+
+Compared with "Rail Europe product coverage" (Mandar Kadam, 2026-10-28):
+- Every **supplier connection** used for B2B trains is exercised by at least one sector. Brands
+  not tested on their own — NS (same BeneMoove connection as SNCB), SNCF Intercités (same PAO
+  connection as TGV/TER), ÖBB Nightjet (same ÖBB API) — were deliberately not added, to keep the
+  run at about 7 minutes.
+- **Not covered:** Trenitalia pass and Eurail/Interrail One Country passes (pass supplier paths
+  the run never touches), Swiss cards (B2C), passholder seat reservations, paid seat selection,
+  railcards, group bookings, and anything after Traveler Details (payment, ticket, cancel, exchange).
+- **Not on that page:** SJ (kept only as a record, probably not sold), DBSNCF/Alleo (still booked,
+  sector #3). Arenaways and Campania Express are B2C-only there, which is why no B2B route exists.
 
 ---
 

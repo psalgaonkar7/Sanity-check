@@ -94,11 +94,12 @@ them `npm run auth:b2b` instead, which skips the AWS step entirely.
    - SNCF Connect POS search-only validation (3 ODs), then switches POS **back explicitly**
    - **19 sectors + 3 passes** built into batched carts → one booking reference per order
 2. **API searchability** (`api-searchability.js`): LocoHub API on **production only**
-   (the staging check was removed on 2026-10-28). It counts products per OD and does NOT look
-   at the carrier brand, so a PASS can be another carrier's trains (RJET Wien→Gyor passes on
-   ÖBB trains while RegioJet has none).
-   Runs **in parallel** with the browser suite. Also how B2C's engine is validated, since
-   B2C itself is anti-bot blocked.
+   (the staging check was removed on 2026-10-28). Routes with `apiBrand` in data/journeys.js
+   (RegioJet, Leo Express) only PASS when that carrier's own trains come back; other routes
+   still only count products. Routes with `daysAhead` (RegioJet: 14) search on their own date.
+   Runs **in parallel** with the browser suite. It does **not** test B2C: the B2C website does
+   not use LocoHub (it calls carriers through its own Bahn library), and B2C itself is anti-bot
+   blocked. Do not describe this check as "the B2C engine".
 3. **Manager deck** (`deck/gen.js`) and **run history** (`log-run.js` → `npm run weekly`).
 4. **Extra checks** (`extra-checks.js`, in parallel): Primer status API, AppFlow
    `tf-era-prod-shared-salesforce-flow` (Group Bookings–SF sync), the Ariane dropfile Glue
@@ -188,7 +189,12 @@ but Naples→Sorrento returns 0 products. All three stay parked.
 ## Reporting results
 
 Read `report/msc-b2b.json`, `report/msc-api-searchability.md`, and the console summary
-("RAIL EUROPE MSC — SANITY RUN SUMMARY"). Lead with:
+("RAIL EUROPE MSC — SANITY RUN SUMMARY"). Older runs: `report/runs/<run time>/` keeps the same
+files for the last 30 runs (since 2026-10-30) — use it before saying "only the latest run is
+kept". Each sector has a `connector` (supplier connection) in `data/journeys.js`: when several
+carriers on one connection fail together, say the connection is the suspect; one alone, the
+carrier. A sector with `daysAhead` (RegioJet: 14) is searched on its own date because its
+inventory ends earlier than +45 days. Lead with:
 - **Booking references** (K + 9 digits, one per order) — status reads `Created`, expected
 - Sectors in cart and passes in cart, expired count (must be 0)
 - API PASS count for production

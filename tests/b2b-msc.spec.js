@@ -301,9 +301,12 @@ test('B2B: build carts and capture booking references (none expired)', async ({ 
           // both Saturdays. Since the run searches a moving target (+45 days), that lands on a
           // non-service day roughly once a week and dropped the sector every time.
           // `nonDaily` carriers therefore retry the WHOLE route list on the next day(s).
-          const dates = [DATE];
+          // A journey can carry its own `daysAhead` (RegioJet: its inventory ends earlier than +45
+          // days). Its "normal" date is then that one, not the global DATE.
+          const ownDays = item.spec.daysAhead != null ? item.spec.daysAhead : data.daysAhead;
+          const dates = [H.futureDate(ownDays)];
           if (item.spec.nonDaily) {
-            for (let k = 1; k <= 2; k++) dates.push(H.futureDate(data.daysAhead + k));
+            for (let k = 1; k <= 2; k++) dates.push(H.futureDate(ownDays + k));
           }
           const attempts = [];
           for (const d of dates) for (const r of routes) attempts.push({ route: r, date: d });
@@ -352,9 +355,11 @@ test('B2B: build carts and capture booking references (none expired)', async ({ 
             continue;
           }
 
-          const usedOtherDate = placed.date !== DATE;
+          const usedOtherDate = placed.date !== dates[0];
           if (usedOtherDate) {
-            console.log(`[booking] ${item.carrier}: no service on ${DATE}, sold on ${placed.date}`);
+            console.log(`[booking] ${item.carrier}: no service on ${dates[0]}, sold on ${placed.date}`);
+          } else if (dates[0] !== DATE) {
+            console.log(`[booking] ${item.carrier}: searched on its own date ${dates[0]} (+${ownDays} days)`);
           }
           const usedFallback = placed.route.routeLabel !== 'primary';
           if (usedFallback) {
@@ -403,7 +408,20 @@ test('B2B: build carts and capture booking references (none expired)', async ({ 
     // held on the carrier side, e.g. "Booked. The item has not been purchased."), which is a real
     // side effect on a third-party system. Created status (cart-side only, nothing sent to the
     // carrier) is the correct and sufficient proof.
-    const bref = await H.continueToTravelerDetails(page);
+    // One retry: on 2026-10-28 the portal answered "Sorry, something unexpected happened" on the
+    // cart page and never opened Traveler Details, so the whole run had no booking reference;
+    // a run minutes later booked fine. Reload the cart and try once more before failing.
+    let bref;
+    try {
+      bref = await H.continueToTravelerDetails(page);
+    } catch (e) {
+      const shown = await page.getByText(/something unexpected happened|try again later/i).first().innerText().catch(() => '');
+      console.log(`[booking] order ${b + 1}: Traveler Details did not open (${shown || String(e).split('\n')[0].slice(0, 80)}) — retrying once`);
+      report.issues.push({ type: 'traveler-details-retry', detail: { order: b + 1, shown: shown || null } });
+      await page.goto('/cart');
+      await page.getByRole('button', { name: /continue to traveler details/i }).first().waitFor({ state: 'visible', timeout: 40000 }).catch(() => {});
+      bref = await H.continueToTravelerDetails(page);
+    }
     const bodyAfter = await page.locator('body').innerText();
     const bexpired = (bodyAfter.match(/00:00:00/g) || []).length;
     report.bookings.push({ order: b + 1, ref: bref, items: inThisCart, expired: bexpired });
