@@ -137,6 +137,12 @@ function buildDm(items, mail) {
   lines.push('✅ RESULT (same as the mail)');
   items.forEach((it, n) => lines.push(`${n + 1}. ${lab(it)}: ${it.v}${it.proof ? ' (' + it.proof + ')' : ''}`));
   lines.push('');
+  const dmNotes = noteLines(items);
+  if (dmNotes.length) {
+    lines.push('📝 NOTES (also at the end of the mail)');
+    dmNotes.forEach((n) => lines.push('- ' + one(n)));
+    lines.push('');
+  }
   lines.push('📎 The mail ends with the Sanity Tracker link (Sanity Tracker.xlsx).');
   lines.push('');
   if (!bookingIssues().length) {
@@ -193,6 +199,21 @@ function fromExtra(r, okText = 'OK') {
   return { v: 'KO', ok: false, note: r.detail };
 }
 
+// One line per issue or KO, shown at the END of the mail (and in the DM): a KO with its reason, a check that
+// could not be made, a retry that was needed, a carrier that could not be booked. Pure reminders (for example the
+// Dropfile "also check Slack") are not issues and are not listed here.
+function noteLines(items) {
+  const lab = (it) => it.label.replace(/\s*:-\s*/, ' - ');
+  const one = (t) => String(t).replace(/\s+/g, ' ').trim().slice(0, 300);
+  const out = [];
+  items.forEach((it) => {
+    (it.issues || []).forEach((t) => out.push(`${lab(it)}: ${one(t)}`));
+    if (it.ok === false && it.note) out.push(`${lab(it)}: KO - ${one(it.note)}`);
+    if (it.v === MANUAL && it.note) out.push(`${lab(it)}: could not be checked - ${one(it.note)}`);
+  });
+  return out;
+}
+
 function buildItems() {
   const prod = (api.envs || []).find((e) => e.label === 'PRODUCTION');
   const testable = prod && (prod.summary.testable != null ? prod.summary.testable : prod.rows.length);
@@ -213,24 +234,43 @@ function buildItems() {
       : prod.summary.pass === testable ? { v: 'OK', ok: true, proof: refProof }
         : { v: 'KO', ok: false, proof: refProof, note: `${testable - prod.summary.pass}/${testable} production API routes failing` };
 
-  // A carrier that could not be booked on ANY route must be visible in the mail and the DM, not
-  // only in the console summary (before 2026-10-30 the line read a plain OK with RegioJet
-  // missing). It does not turn the line KO by itself — one carrier down is for a person to judge —
-  // but it is named on the line and listed under "check yourself" in the DM.
+  // A carrier that could not be booked on ANY route is written on point 1 as KO WITH its reason
+  // (Pratikesh 2026-11-08: "if Renfe is down or any carrier down ... mention it as KO in description but
+  // mention the reason"). The line's own OK/KO and the subject are NOT flipped by it: one carrier down is
+  // for a person to judge, and the subject line is his to edit in the draft. It also stays in the
+  // "check yourself" list of the DM.
   const notBooked = (b2b.sectors || []).filter((s) => s.status !== 'IN CART');
-  if (notBooked.length && b2c.v === 'OK') {
-    const names = notBooked.map((s) => s.carrier.replace(/^PASS\//, '')).join(', ');
-    b2c.proof = [b2c.proof, `not booked: ${names}`].filter(Boolean).join('; ');
+  if (notBooked.length) {
+    const via = (s) => { const j = data.ptpJourneys.find((x) => x.id === s.id); return j && j.connector ? ' via ' + j.connector : ''; };
+    // Plain-language reason from the raw error text of the last route tried.
+    const reasonOf = (s) => {
+      const err = String(s.error || s.status || '').replace(/\s+/g, ' ');
+      const n = s.routesTried || (/all (\d+) route/.exec(err) || [])[1];
+      const on = n ? `on all ${n} routes tried` : 'on every route tried';
+      if (/did not reach the results page/i.test(err)) return `search did not return results ${on} (the portal stayed on the home page after ${(/within (d+) ?s/.exec(err) || [])[1] || '35'} s)`;
+      if (/NO RESULTS|no results|no .* trains/i.test(err)) return `no trains returned ${on}`;
+      if (/timeout|timed out/i.test(err)) return `search timed out ${on}`;
+      return err.slice(0, 110);
+    };
+    const koText = notBooked.map((s) => `${s.carrier.replace(/^PASS\//, '')}${via(s)}: ${reasonOf(s)}`).join('; ');
+    b2c.proof = [b2c.proof, `KO carrier - ${koText}`].filter(Boolean).join('; ');
+    b2c.issues = (b2c.issues || []).concat(notBooked.map((x) => `KO carrier ${x.carrier.replace(/^PASS\//, '')}${via(x)}: ${reasonOf(x)}`));
     b2c.manualOnly = true;
-    const via = (s) => { const j = data.ptpJourneys.find((x) => x.id === s.id); return j && j.connector ? ` via ${j.connector}` : ''; };
-    b2c.note = [b2c.note, `could not be booked on any route: ${notBooked.map((s) => `${s.carrier}${via(s)} (${String(s.error || s.status).replace(/\s+/g, ' ').slice(0, 90)})`).join(' | ')} - check by hand`].filter(Boolean).join(' | ');
+    b2c.note = [b2c.note, `KO - could not be booked on any route: ${notBooked.map((s) => `${s.carrier}${via(s)} (${reasonOf(s)})`).join(' | ')} - check by hand`].filter(Boolean).join(' | ');
   }
 
+  // Retries that worked are still worth a line at the end of the mail (2026-11-08: "if any issue, mention it as a
+  // note at the end of the mail"): the line stays OK, the note says what had to be retried.
+  const tdRetry = ((b2b.issues || []).filter((x) => x.type === 'traveler-details-retry'));
+  if (tdRetry.length) {
+    b2c.issues = (b2c.issues || []).concat(`Traveler Details did not open on the 1st try (portal said: "${String((tdRetry[0].detail || {}).shown || 'unknown').slice(0, 80)}"); the retry worked`);
+  }
   const ccChina = fromExtra(extras.chinaCustomerCare);
   if (ccChina.ok && extras.chinaCustomerCare.booking) {
     const bk = extras.chinaCustomerCare.booking;
     ccChina.proof = `Booking ref: ${bk.ref}${bk.reachedPayment ? '; payment page reached' : ''}`;
   }
+  if (extras.chinaCustomerCare && /2nd attempt/.test(extras.chinaCustomerCare.detail || '')) ccChina.issues = ['the China booking worked only on the 2nd attempt (the 1st one failed)'];
 
   // The "B2B :- System Connectivity Status" line was REMOVED from the mail and the DM on
   // 2026-10-28 (Pratikesh: it must be excluded from the sanity run — it read KO on a carrier or
@@ -244,6 +284,7 @@ function buildItems() {
   const primer = fromExtra(extras.primer);
   if (extras.primer && extras.primer.notices && extras.primer.notices.length) {
     primer.note = [primer.note, 'info notice on the status page (impact none): ' + extras.primer.notices.join('; ')].filter(Boolean).join(' | ');
+    primer.issues = ['info notice on the status page (impact none): ' + extras.primer.notices.join('; ')];
   }
   if (extras.primer && extras.primer.maintenance && extras.primer.maintenance.length) {
     primer.note = [primer.note, 'maintenance: ' + extras.primer.maintenance.join('; ')].filter(Boolean).join(' | ');
@@ -295,6 +336,8 @@ function buildMail(items) {
       + `<td style="padding:1px 0;vertical-align:top"${color}>${sep}${value}</td></tr>`;
   }).join('\n');
 
+  const notes = noteLines(items);
+  const notesHtml = notes.length ? `<p><b>Notes (issues / KO):</b></p>\n<ul>${notes.map((n) => `<li>${esc(n)}</li>`).join('')}</ul>` : '';
   const html = `<div style="font-family:Calibri,Aptos,Arial,sans-serif;font-size:11pt">
 <p>Hello All,</p>
 <p>Please find today's sanity check result done at ${slot} IST</p>
@@ -303,6 +346,7 @@ ${rowHtml}
 </table>
 <p><br>Details Sanity check result:-</p>
 <p><a href="${esc(TRACKER)}">Sanity Tracker.xlsx</a></p>
+${notesHtml}
 </div>`;
 
   const text = [
@@ -310,6 +354,7 @@ ${rowHtml}
     `Please find today's sanity check result done at ${slot} IST`, '',
     ...items.map((it, n) => `${n + 1}. ${it.label}${it.link ? ': ' + it.link : (it.sep || '  :- ') + shown(it)}`),
     '', 'Details Sanity check result:-', '', 'Sanity Tracker.xlsx (' + TRACKER + ')',
+    ...(notes.length ? ['', 'Notes (issues / KO):', ...notes.map((n) => '- ' + n)] : []),
   ].join('\r\n');
 
   return { subject, html, text, status };

@@ -26,8 +26,19 @@
 const R = (fq, fo, fc, tq, to_, tc) => ({ from: { q: fq, opt: fo }, to: { q: tq, opt: to_ }, fromCode: fc, toCode: tc });
 
 const DATA = {
-  // ~45 days out keeps us well inside every carrier's booking horizon and your ">=7 days" rule.
-  // Overridable with env var MSC_DAYS_AHEAD.
+  // Default test date: 45 days out (and your ">=7 days" rule). Overridable with env var MSC_DAYS_AHEAD.
+  // BUT 45 is NOT inside every carrier's booking window. Measured 2026-11-08 with read-only LocoHub production
+  // searches on Wednesdays (the carrier's OWN trains, by transport_name): how far ahead each carrier still sells.
+  //   RegioJet Wien->Gyor   ~23 d   -> sector own daysAhead 14
+  //   RegioJet Prague->Brno ~53 d   -> sector own daysAhead 30
+  //   SNCF Paris->Bordeaux  ~53 d   -> sector own daysAhead 30   (also the date the 4 portal searches use)
+  //   Renfe Barcelona->Madrid ~70 d -> sector own daysAhead 40
+  //   Leo Express           ~83 d   -> default 45 (inside, a little close)
+  //   TER Paris->Rouen     ~105 d   Lyria ~143 d   RDG ~133 d   OBB ~173 d   Alleo ~173 d   OUIGO ~173 d
+  //   SBB/RhB ~173 d   Italo ~210 d   Eurostar ~294 d   European Sleeper ~294 d   DB, SNCB, Iryo, Trenitalia 330+ d
+  // Rule used: a carrier whose window is under ~90 days gets its own `daysAhead` of about 55% of that window (the
+  // window moves when a carrier opens its next tranche of dates, so the test date keeps a wide margin); the others keep 45.
+  // Re-measure after a carrier changes its sales horizon (a sector dropped with "no <carrier> trains" is the tell).
   daysAhead: Number(process.env.MSC_DAYS_AHEAD || 45),
 
   pos: {
@@ -68,6 +79,7 @@ const DATA = {
     // Barcelona->Madrid genuinely returns THREE carriers. One entry each so all three are
     // actually added to the cart; previously the first-listed fare won and two went untested.
     { id: 8,  carrier: 'RENFE',            connectivityNames: ['RENFE'],            carrierSlug: 'renfe',
+      daysAhead: 40,   // Renfe sells ~70 d ahead (measured 2026-11-08); +45 sat near the edge
       fromCode: 'ES:barcelona_sants', toCode: 'ES:madrid_atocha',
       from: { q: 'Barcelona', opt: 'Barcelona Sants, Spain' },                to: { q: 'Madrid',    opt: 'Madrid-Puerta De Atocha, Spain' } },
     { id: 9,  carrier: 'IRYO',             connectivityNames: ['IRYO'],             carrierSlug: 'iryo',
@@ -102,10 +114,10 @@ const DATA = {
     // RegioJet: own test date (`daysAhead`) and brand check (`apiBrand`). LocoHub production has
     // RegioJet inventory only up to a cut-off (checked 2026-10-24: Vienna routes to 30 Nov 2026,
     // Prague-Brno to 12 Dec 2026), so the global +45 days fell past it and RJET/REJE were dropped
-    // every run although RegioJet itself was fine. 14 days stays inside that window. `apiBrand`
+    // every run although RegioJet itself was fine. 2026-11-08 re-measure: Wien->Gyor ~23 d (own date 14), Prague->Brno ~53 d (own date 30). `apiBrand`
     // makes the API check require RegioJet trains: before, Wien->Gyor "passed" on OBB trains.
     { id: 12, carrier: 'RegioJet (REJE)',  connectivityNames: ['REJE'],             carrierSlug: 'regiojet',
-      connector: 'Distribusion', daysAhead: 14, apiBrand: 'RegioJet',
+      connector: 'Distribusion', daysAhead: 30, apiBrand: 'RegioJet',
       fromCode: 'CZ:prague', toCode: 'CZ:brno',
       from: { q: 'Prague',    opt: 'Praha hl.n, Czechia' },                   to: { q: 'Brno',      opt: 'Brno hl.n., Czechia' } },
     { id: 13, carrier: 'RegioJet (RJET)',  connectivityNames: ['RJET'],             carrierSlug: 'regiojet',
@@ -159,6 +171,7 @@ const DATA = {
       from: { q: 'Paris',     opt: 'Paris (All stations), France' },          to: { q: 'Rouen',     opt: 'Rouen-Rive-Droite, France' } },
     // SNCF has no `sncf` logo — it sells as TGV INOUI, so that brand slug is the proof.
     { id: 19, carrier: 'SNCF (TGV INOUI)', connectivityNames: ['SNCF'],             carrierSlug: 'tgvinoui',
+      daysAhead: 30,   // SNCF TGV INOUI sells ~53 d ahead (measured 2026-11-08); +45 sat near the edge
       fromCode: 'FR:paris', toCode: 'FR:bordeaux',
       from: { q: 'Paris',     opt: 'Paris (All stations), France' },          to: { q: 'Bordeaux',  opt: 'Bordeaux, France' } },
   ],

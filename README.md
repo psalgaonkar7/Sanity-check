@@ -151,6 +151,29 @@ train is this?"; verification asks "is *our* carrier's brand in these results?".
 - **Each run's reports are kept** in `report/runs/<run time>/` (the last 30 runs): the booking,
   extras, API and Playwright results, the mail text, and the API + extra-check console output.
 
+### Booking window per carrier (2026-11-08)
+
+The default test date is +45 days, but carriers sell different distances ahead. Measured on 2026-11-08 with read-only LocoHub production
+searches on Wednesdays (the carrier own trains, matched on `transport_name`):
+
+| Carrier (sector) | Sells up to about | Test date used |
+|---|---|---|
+| RegioJet Wien-Gyor (#13) | +23 d | **+14 d** |
+| RegioJet Prague-Brno (#12) | +53 d | **+30 d** |
+| SNCF TGV INOUI Paris-Bordeaux (#19) | +53 d | **+30 d** (also the date the 4 portal searches use) |
+| Renfe Barcelona-Madrid (#8) | +70 d | **+40 d** |
+| Leo Express (#17) | +83 d | +45 d |
+| TER (#18), RDG (#6), Lyria (#5) | +105 / +133 / +143 d | +45 d |
+| OBB, Alleo, OUIGO, SBB/RhB | +173 d | +45 d |
+| Italo, Eurostar, European Sleeper | +210 / +294 / +294 d | +45 d |
+| DB, SNCB, Iryo, Trenitalia | 330+ d | +45 d |
+
+Rule: a carrier that sells under about 90 days ahead gets its own `daysAhead` (about 55% of its window, because the window moves when the
+carrier opens its next block of dates). It is set per sector in `data/journeys.js`, which also holds the measurement in its header comment.
+After the change, all 101 primary and fallback routes were searched at their own date: 98 returned the carrier own trains; the 3 others are
+fallback routes only (Renfe Barcelona-Valencia returned Renfe Euromed/Intercity names, TER Marseille-Nice returned TRAIN ZOU, RegioJet Brno-Ostrava
+returned no RegioJet trains) and were not touched. Re-measure when a sector is dropped with "no <carrier> trains".
+
 ### Product coverage vs. the Tech & Product page (2026-10-30)
 
 Compared with "Rail Europe product coverage" (Mandar Kadam, 2026-10-28):
