@@ -81,8 +81,8 @@ Node on any machine (`-CheckOnly` to test) and must stay ASCII-only.
   falling back to the current user's `OneDrive - RAILEUROPE\Desktop\Training Material\Postman
   Collections\LH` (the older `Notes\Training\Postman json files\LH` fallback was dropped on
   2026-10-27: that folder no longer exists).
-- `notify.js` — the mail draft + the result DM. `extra-checks.js` — Primer, AppFlow, dropfile,
-  SF count and the 4 portal checks (`lib/portals.js`, `lib/portal-list.js`). `lib/env.js` —
+- `notify.js` — the mail draft + the result DM. `extra-checks.js` — Primer, AppFlow, dropfile
+  and the 4 portal checks (`lib/portals.js`, `lib/portal-list.js`). `lib/env.js` —
   the shared `.env` loader. `china-full.js` — the opt-in full China booking.
 
 ## Memory

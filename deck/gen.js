@@ -293,8 +293,7 @@ function stat(slide, x, y, w, big, small, color) {
   s.addText([
     { text: "A real B2C website check (bot-protected today)", options: { bullet: true, breakLine: true } },
     { text: "Deeper booking steps: payment, ticket, cancel (needs a decision)", options: { bullet: true, breakLine: true } },
-    { text: "Missing products: Trenitalia pass, One Country passes, Swiss cards", options: { bullet: true, breakLine: true } },
-    { text: "SF case count (Salesforce CLI approval)", options: { bullet: true } },
+    { text: "Missing products: Trenitalia pass, One Country passes, Swiss cards", options: { bullet: true } },
   ], { x: 7.15, y: 2.75, w: 5.4, h: 3.4, fontFace: SANS, fontSize: 13.5, color: INK, paraSpaceAfter: 6, margin: 0 });
 })();
 

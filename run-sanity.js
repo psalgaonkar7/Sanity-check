@@ -32,7 +32,7 @@ function startBackground(cmd) {
   // themselves must stay strictly serial — they all share ONE account/cart/POS, which is why
   // playwright.config.js pins `workers: 1`. Overlapping them corrupts the run.
   // Its output is buffered and printed in order afterwards, so the logs stay readable.
-  // The extra checks (Primer, AppFlow, China portals, SF cases) are also independent of the
+  // The extra checks (Primer, AppFlow, Dropfile, portal searches incl. the China booking) are also independent of the
   // B2B account — the China check uses its own browser on the .cn domains — so they run in
   // parallel too, and add no time to the run.
   console.log('\n=== 1/5 · B2B browser suite (serial — shared account)  ‖  API searchability + extra checks (in parallel) ===\n');

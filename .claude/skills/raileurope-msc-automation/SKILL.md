@@ -103,8 +103,7 @@ them `npm run auth:b2b` instead, which skips the AWS step entirely.
 3. **Manager deck** (`deck/gen.js`) and **run history** (`log-run.js` → `npm run weekly`).
 4. **Extra checks** (`extra-checks.js`, in parallel): Primer status API, AppFlow
    `tf-era-prod-shared-salesforce-flow` (Group Bookings–SF sync), the Ariane dropfile Glue
-   result, a logged-in search on the 4 other portals (plus the one-train China booking), and
-   the SF *Technical HD view* case count. Each degrades to SKIPPED with a fix when a login lapses.
+   result, a logged-in search on the 4 other portals (plus the one-train China booking). Each degrades to SKIPPED with a fix when a login lapses.
 5. **Mail + result DM** (`notify.js`, last step): opens the sanity mail as an Outlook draft, then
    DMs Pratikesh the result through the **Pratikesh Assistant** workflow webhook
    (`SLACK_ALERT_WEBHOOK`, same payload as `RE/Assistant`). **Nothing goes to a team channel**:
@@ -114,7 +113,7 @@ them `npm run auth:b2b` instead, which skips the AWS step entirely.
    (`lib/portals.js`; `npm run auth:portals` renews the logins). Customer care China also
    books one train to a booking ref (Traveler Details, Created; own cart, runs in parallel).
    Booking refs are on their portal's line (point 1 ROW, point 6 China), not in the subject.
-   **The mail has 9 points** (the connectivity point was removed 2026-10-28, and the "SF cases not linked with an SR" line on 2026-10-29; Dropfile is point 9).
+   **The mail has 9 points** (the connectivity point was removed 2026-10-28, and the "SF cases not linked with an SR" line on 2026-10-29, whose check was then deleted on 2026-11-09; Dropfile is point 9).
 
 ### Rules for the DM and the mail — do not weaken these
 

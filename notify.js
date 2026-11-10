@@ -290,9 +290,8 @@ function buildItems() {
     primer.note = [primer.note, 'maintenance: ' + extras.primer.maintenance.join('; ')].filter(Boolean).join(' | ');
   }
 
-  // "SF cases not linked with an SR" is NOT a line of the mail or the DM any more (Pratikesh,
-  // 2026-10-29: it only ever showed a "0" placeholder because Salesforce isn't connected here).
-  // extra-checks.js still records the real status in report/msc-extras.json (sfCases).
+  // The "SF cases not linked with an SR" check is gone entirely (mail line removed 2026-10-29, the check itself
+  // removed from extra-checks.js 2026-11-09: Pratikesh does not need it).
   // The run reads the Glue sanity-check result (discrepancy count), but the support role can't
   // see run history for most Ariane jobs, so "did any Glue job fail" stays a manual Slack check.
   const dropfile = fromExtra(extras.dropfile);

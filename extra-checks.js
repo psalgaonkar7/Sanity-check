@@ -6,7 +6,6 @@
 //   Key account / Agents ROW,     logged in with a saved session, a real search returns trains
 //   Key account / Customer care   (lib/portals.js; sessions saved by `npm run auth:portals`)
 //   China
-//   SF cases not linked with SR   Salesforce "Technical HD view" list view, via the sf CLI
 //
 // All read-only. Nothing here touches the B2B .com account, cart or POS, which is why it is
 // safe to run alongside the browser suite. Each check degrades to SKIPPED with a one-line fix
@@ -16,7 +15,7 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const { spawnSync } = require('child_process');
-require('./lib/env').loadEnv();   // AWS_CLI, SF_ORG_ALIAS, AWS_PROFILE_* ... from .env, as the docs say
+require('./lib/env').loadEnv();   // AWS_CLI, AWS_PROFILE_* ... from .env, as the docs say
 
 const REPORT = path.join(__dirname, 'report');
 const OUT = path.join(REPORT, 'msc-extras.json');
@@ -194,52 +193,9 @@ async function checkPortals() {
 }
 
 // ---------------------------------------------------------------------------------------
-// Salesforce — the count the team reports is the number of cases in the "Technical HD view"
-// list view. Reading the list view's own results (rather than re-creating its filters in
-// SOQL) keeps this exactly in step with what the team sees, even if the view is edited.
-// Needs the Salesforce CLI and a one-time `sf org login web` BY THE USER — no password ever
-// passes through this script; the access token is used in-process only and never printed.
-// Deciding whether a case is a tech issue that needs an SR stays a human call — this only
-// counts and lists.
-// ---------------------------------------------------------------------------------------
-const SF_LIST_VIEW = '00B200000059EwPEAU'; // Case / Technical_HD_view (verified 2026-09-27)
-
-async function checkSalesforce() {
-  // Alias comes from .env; restrict it to safe characters since it is passed through a shell.
-  const alias = String(process.env.SF_ORG_ALIAS || 're-prod').replace(/[^\w.-]/g, '');
-  const disp = spawnSync('sf org display --target-org ' + alias + ' --json', { encoding: 'utf8', timeout: 60000, shell: true });
-  if (disp.error || /not recognized|command not found/i.test(disp.stderr || '')) {
-    return { status: 'SKIPPED', detail: 'Salesforce CLI not set up (see README: SF cases)' };
-  }
-  let d;
-  try { d = JSON.parse(disp.stdout); } catch { return { status: 'SKIPPED', detail: 'unexpected sf CLI output' }; }
-  const token = d.result && d.result.accessToken;
-  const instance = d.result && d.result.instanceUrl;
-  if (d.status !== 0 || !token || !instance) {
-    // On 2026-09-27 the login itself was refused with OAUTH_APPROVAL_ERROR_GENERIC: the org does
-    // not (yet) allow the Salesforce CLI connected app, so re-running the login cannot fix it —
-    // a Salesforce admin has to approve the app first. Say that, rather than send the user round
-    // a loop.
-    return { status: 'SKIPPED', detail: `not logged in to Salesforce — needs the Salesforce CLI app approved by a Salesforce admin, then: sf org login web --alias ${alias}` };
-  }
-  try {
-    const r = await fetch(`${instance}/services/data/v64.0/sobjects/Case/listviews/${SF_LIST_VIEW}/results?limit=200`,
-      { headers: { Authorization: `Bearer ${token}` }, signal: T(30000) });
-    if (r.status === 401) return { status: 'SKIPPED', detail: `Salesforce session expired — run: sf org login web --alias ${alias}` };
-    if (!r.ok) return { status: 'SKIPPED', detail: `Salesforce API HTTP ${r.status}` };
-    const j = await r.json();
-    const col = (rec, name) => ((rec.columns || []).find((c) => c.fieldNameOrPath === name) || {}).value;
-    const cases = (j.records || []).map((rec) => ({ number: col(rec, 'CaseNumber'), subject: col(rec, 'Subject') }));
-    return { status: cases.length ? 'REVIEW' : 'OK', count: j.size != null ? j.size : cases.length, cases, detail: `${cases.length} case(s) in Technical HD view` };
-  } catch (e) {
-    return { status: 'SKIPPED', detail: 'Salesforce API error: ' + String(e).slice(0, 100) };
-  }
-}
-
-// ---------------------------------------------------------------------------------------
 async function main() {
-  const [primer, appflow, dropfile, portals, sfCases] = await Promise.all([checkPrimer(), checkAppFlow(), checkDropfile(), checkPortals(), checkSalesforce()]);
-  const result = { runId: process.env.MSC_RUN_ID || null, at: new Date().toISOString(), primer, appflow, dropfile, ...portals, sfCases };
+  const [primer, appflow, dropfile, portals] = await Promise.all([checkPrimer(), checkAppFlow(), checkDropfile(), checkPortals()]);
+  const result = { runId: process.env.MSC_RUN_ID || null, at: new Date().toISOString(), primer, appflow, dropfile, ...portals };
   fs.mkdirSync(REPORT, { recursive: true });
   fs.writeFileSync(OUT, JSON.stringify(result, null, 2));
   const rows = [
@@ -250,7 +206,6 @@ async function main() {
     ['Key account China (search)', result.chinaKeyAccount],
     ['Customer care China (search + booking)', result.chinaCustomerCare],
     ['Dropfile sanity check (Glue)', dropfile],
-    ['SF cases not linked with an SR', sfCases],
   ];
   console.log('Extra sanity checks (read-only)\n');
   for (const [label, r] of rows) console.log(`  [${String(r.status).padEnd(7)}] ${label.padEnd(34)} ${r.detail || ''}`);

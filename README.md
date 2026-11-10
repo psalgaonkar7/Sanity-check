@@ -295,7 +295,7 @@ Handy env vars (set them in the same window before the command):
 | `MSC_SLOT=HH:MM` | force the slot time shown in the DM and the mail |
 | `MSC_PAYMENT_PROBE=1` | opt-in: one item to the Hold & Payment page (see "Payment-page probe") |
 | `PORTAL=<key>` | used by `npm run china-full` / the opt-in `portal` project to pick the portal |
-| `POSTMAN_DIR`, `AWS_CLI`, `SF_ORG_ALIAS`, `MAIL_TO`, `SANITY_TRACKER_URL`, `SLACK_ALERT_WEBHOOK` | settings; also read from `.env` (copy `.env.example`) |
+| `POSTMAN_DIR`, `AWS_CLI`, `MAIL_TO`, `SANITY_TRACKER_URL`, `SLACK_ALERT_WEBHOOK` | settings; also read from `.env` (copy `.env.example`) |
 | `AWS_PROFILE_SANITY`, `AWS_PROFILE_ARIANE` | override the AWS profiles (defaults `era-prod`, `ariane-prod`) |
 | `DAYS` | `npm run weekly` only: how many days back (default 7) |
 
@@ -343,7 +343,6 @@ extra time: the extra checks run in parallel with the browser suite.
 | Key account ROW · Agents portal ROW · Key account China | each portal opened with its own saved login (`auth/<key>.json`, `npm run auth:portals`); a real train search (Paris→Bordeaux, then London→Paris, then Vienna→Munich; each route retried once) — `lib/portals.js` | logged in **and** a search returned trains. Expired/missing login = `[check manually]`; logged in but every search fails = KO |
 | Customer care China | the same logged-in search, then ONE train carted to a booking reference on Traveler Details (status Created, ref starts with **Z**). The cart is emptied before and again right after, so nothing is left to expire there — an EXPIRED item in the .cn cart cannot be removed through the site and blocks Traveler Details for the next run | search returned trains **and** the booking reference was captured; search OK but booking failed = KO (the reason says if an expired leftover was the cause) |
 | Dropfile sanity check | AWS CLI (`ariane-prod` SSO profile, same `era` login) → latest `[Check] Discrepancies: N` line from Glue job `tf-ariane-prod-transactions-sanity-check` in `/aws-glue/jobs/output` (job runs daily ~14:00 IST; last 30 h are read) | 0 discrepancies. Failed Glue jobs are **not** covered (the support role can't read most Ariane job histories), so the run reminds you to check Slack `#ariane-alerts-prod`. Procedure: Confluence SR page 2223472642 |
-| SF cases not linked with an SR | Salesforce CLI → the *Technical HD view* list view | the count of cases in that view |
 
 Three things that are easy to get wrong, and why the checks are built the way they are:
 
@@ -443,10 +442,7 @@ to a distribution list and includes judgement calls, so a person presses Send.
 
 Honesty rules built into the draft:
 
-- Anything the run did **not** verify is written as **`[check manually]`**, never as OK. The
-  SF cases is no longer a line of the mail or the DM (removed 2026-10-29: it only ever showed a
-  `0` placeholder while the Salesforce CLI was not set up); `extra-checks.js` still records it in
-  `report/msc-extras.json`.
+- Anything the run did **not** verify is written as **`[check manually]`**, never as OK.
 - The subject says `KO` if any automated item failed.
 - Carrier connectivity (the health-center page) is **not part of the sanity at all** any more
   (not read, not mailed), and a dropped carrier (e.g. RegioJet) does not turn a line KO by
@@ -469,27 +465,6 @@ The draft is also saved to `report/sanity-mail.html` and `report/sanity-mail.txt
 
 Why a compose window and not a finished draft in the Drafts folder: only **classic** Outlook
 can be automated that way, and this machine runs **new** Outlook.
-
-### SF cases — one-time setup (optional)
-
-The count needs the Salesforce CLI and a login **you** do once in your browser; no password
-ever passes through a script:
-
-```bash
-npm install -g @salesforce/cli
-sf org login web --alias re-prod
-```
-
-**Current status: blocked on Salesforce admin approval.** On 2026-09-27 the login was refused
-with `OAUTH_APPROVAL_ERROR_GENERIC`. OAuth itself works in the org (admin-installed apps such as
-*Atlassian Links* log in fine), so the refusal is specific to the Salesforce CLI app — a
-Salesforce admin has to approve it for the user's profile. Retrying the login will not help.
-Until then item 10 shows the `0` placeholder (counted by hand); nothing else is affected.
-
-Once approved, item 10 fills itself in. It reads the *Technical HD view* list view directly, so it
-always matches what you see in Salesforce. **Deciding whether a case needs an SR stays with
-you** — the run counts and lists the cases, it does not judge them. If the login lapses the
-item goes back to `[check manually]` with the command to re-run.
 
 ### Also needs a live login
 
@@ -775,7 +750,7 @@ tools/verify-station-labels.js read-only check that every route in data/journeys
                                typed into the portal autocomplete AND lands in the right
                                country — `npm run verify-routes`
 api-searchability.js       read-only LocoHub API check, production only (staging removed 2026-10-28)
-extra-checks.js            Primer, AppFlow (Group Bookings–SF sync), 4 portal checks, dropfile, SF cases — in parallel
+extra-checks.js            Primer, AppFlow (Group Bookings–SF sync), 4 portal checks, dropfile — in parallel
 notify.js                  end of run: the sanity mail draft (never auto-sent) + result DM to you via Pratikesh Assistant
 .env.example               template for .env (mail To:, SF alias, optional DM webhook) — .env itself is git-ignored
 run-sanity.js              orchestrates: browser suite ‖ API check -> deck refresh -> history log -> summary
