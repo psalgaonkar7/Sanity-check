@@ -131,7 +131,7 @@ function buildDm(items, mail) {
   }
   if (manual.length) {
     lines.push('👉 CHECK YOURSELF BEFORE SENDING THE MAIL');
-    manual.forEach((it) => lines.push(`- ${lab(it)}${it.note ? ': ' + one(it.note) : ''}`));
+    manual.forEach((it) => lines.push(`- ${lab(it)}${it.note ? ": " + one(it.note) : (it.issues && it.issues.length ? ": see the NOTES below" : "")}`));
     lines.push('');
   }
   lines.push('✅ RESULT (same as the mail)');
@@ -234,7 +234,7 @@ function buildItems() {
       : prod.summary.pass === testable ? { v: 'OK', ok: true, proof: refProof }
         : { v: 'KO', ok: false, proof: refProof, note: `${testable - prod.summary.pass}/${testable} production API routes failing` };
 
-  // A carrier that could not be booked on ANY route is written on point 1 as KO WITH its reason
+  // A carrier that could not be booked on ANY route is listed in the Notes block (mail end + DM) as KO WITH its reason, not on point 1 itself
   // (Pratikesh 2026-11-08: "if Renfe is down or any carrier down ... mention it as KO in description but
   // mention the reason"). The line's own OK/KO and the subject are NOT flipped by it: one carrier down is
   // for a person to judge, and the subject line is his to edit in the draft. It also stays in the
@@ -247,16 +247,13 @@ function buildItems() {
       const err = String(s.error || s.status || '').replace(/\s+/g, ' ');
       const n = s.routesTried || (/all (\d+) route/.exec(err) || [])[1];
       const on = n ? `on all ${n} routes tried` : 'on every route tried';
-      if (/did not reach the results page/i.test(err)) return `search did not return results ${on} (the portal stayed on the home page after ${(/within (d+) ?s/.exec(err) || [])[1] || '35'} s)`;
+      if (/did not reach the results page/i.test(err)) return `search did not return results ${on} (the portal stayed on the home page after ${(/within (\d+) ?s/.exec(err) || [])[1] || '35'} s)`;
       if (/NO RESULTS|no results|no .* trains/i.test(err)) return `no trains returned ${on}`;
       if (/timeout|timed out/i.test(err)) return `search timed out ${on}`;
       return err.slice(0, 110);
     };
-    const koText = notBooked.map((s) => `${s.carrier.replace(/^PASS\//, '')}${via(s)}: ${reasonOf(s)}`).join('; ');
-    b2c.proof = [b2c.proof, `KO carrier - ${koText}`].filter(Boolean).join('; ');
     b2c.issues = (b2c.issues || []).concat(notBooked.map((x) => `KO carrier ${x.carrier.replace(/^PASS\//, '')}${via(x)}: ${reasonOf(x)}`));
     b2c.manualOnly = true;
-    b2c.note = [b2c.note, `KO - could not be booked on any route: ${notBooked.map((s) => `${s.carrier}${via(s)} (${reasonOf(s)})`).join(' | ')} - check by hand`].filter(Boolean).join(' | ');
   }
 
   // Retries that worked are still worth a line at the end of the mail (2026-11-08: "if any issue, mention it as a
