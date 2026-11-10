@@ -78,7 +78,7 @@ const ODS = (() => {
 })();
 
 const DAYS_AHEAD = Number(process.env.MSC_DAYS_AHEAD || 45);
-function futureDate(days) { const d = new Date(); d.setDate(d.getDate() + days); return d.toISOString().slice(0, 10); }
+const futureDate = (days) => require('./lib/test-date').testDate(days);   // skips Christmas / 1 Jan, see lib/test-date.js
 function envVal(env, key) { const v = (env.values || []).find((x) => x.key === key); return v ? v.value : undefined; }
 function usableToken(t) { return !!t && t.length > 20 && !/^(see |\{\{)/i.test(t); }
 

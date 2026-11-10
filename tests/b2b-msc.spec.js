@@ -308,6 +308,8 @@ test('B2B: build carts and capture booking references (none expired)', async ({ 
           if (item.spec.nonDaily) {
             for (let k = 1; k <= 2; k++) dates.push(H.futureDate(ownDays + k));
           }
+          // futureDate() can map neighbouring days onto the same service day (Christmas): try each date once.
+          for (let i = dates.length - 1; i > 0; i--) if (dates.indexOf(dates[i]) !== i) dates.splice(i, 1);
           const attempts = [];
           for (const d of dates) for (const r of routes) attempts.push({ route: r, date: d });
 

@@ -193,6 +193,9 @@ Other sheets: RE\Assistant\CMD-cheatsheet.txt (the Assistant that can start this
    The subject OK/KO is only a suggestion: edit it in the Outlook draft.
    Customer care China tries its booking twice; a failure says which page it was stuck on and saves
    reportchina-booking-fail-<attempt>.png.
+ - The test date skips 24, 25 and 26 December and 1 January (it moves to the last service day before them; lib	est-date.js).
+   On 2026-11-10 the +45 day date was 25 Dec: Eurostar and RDG run nothing that day, so both were dropped and the API check
+   showed 2/16 NO RESULTS with HTTP 200 (9 Nov: 24 Dec, Leo Express). If a carrier is dropped on ALL routes with no error, check the date first.
  - Each carrier is searched on its OWN test date, because carriers sell different distances ahead (measured 2026-11-08):
    RegioJet Wien-Gyor 14 d (sells ~23), RegioJet Prague-Brno 30 d (~53), SNCF 30 d (~53), Renfe 40 d (~70), all others 45 d
    (Leo Express ~83, TER ~105, ... DB/SNCB/Iryo/Trenitalia 330+). A sector dropped with "no <carrier> trains" usually means the
